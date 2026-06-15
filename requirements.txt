@@ -3,7 +3,7 @@ uvicorn[standard]
 pandas
 openpyxl
 groq
-streamlit
-matplotlib
 numpy
 requests
+jinja2
+python-multipart
