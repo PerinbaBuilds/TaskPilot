@@ -1,0 +1,1586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GreenMind — Sustainable Cloud Scheduler</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:      #060b11;
+  --surface: #0d1421;
+  --card:    #0f1a2a;
+  --border:  #1c2d40;
+  --green:   #00d26a;
+  --green2:  #00a352;
+  --glow:    rgba(0,210,106,0.18);
+  --blue:    #4f9cf9;
+  --yellow:  #f0a500;
+  --red:     #e74c3c;
+  --text:    #e8f0f8;
+  --muted:   #6b7d8f;
+  --sidebar: 260px;
+  --nav:     64px;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow-x: hidden;
+}
+
+/* ── NAVBAR ── */
+.gm-nav {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  height: var(--nav);
+  background: rgba(13,20,33,0.96);
+  backdrop-filter: blur(24px);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 20px 0 280px;
+}
+.gm-nav .brand {
+  display: flex; align-items: center; gap: 10px;
+  font-weight: 800; font-size: 1.05rem; color: var(--green);
+  text-decoration: none; letter-spacing: -0.3px;
+  position: fixed; left: 0; top: 0; width: var(--sidebar);
+  height: var(--nav);
+  padding: 0 20px;
+  border-right: 1px solid var(--border);
+  background: rgba(13,20,33,0.96);
+}
+.brand-icon { font-size: 1.3rem; }
+.carbon-pill {
+  display: flex; align-items: center; gap: 7px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 20px; padding: 5px 14px;
+  font-size: 0.75rem; font-weight: 500; color: var(--muted);
+  white-space: nowrap;
+}
+.cdot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.nav-spacer { flex: 1; }
+.queue-info {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.8rem; color: var(--muted);
+}
+.q-badge {
+  background: var(--green); color: #000;
+  border-radius: 10px; padding: 2px 9px;
+  font-size: 0.72rem; font-weight: 800; min-width: 24px; text-align: center;
+}
+.btn-add {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 7px 16px;
+  font-size: 0.82rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; font-family: inherit;
+}
+.btn-add:hover { border-color: var(--green); color: var(--green); }
+.btn-run {
+  background: linear-gradient(135deg, var(--green), var(--green2));
+  border: none; color: #000; border-radius: 8px;
+  padding: 9px 24px; font-size: 0.88rem; font-weight: 800;
+  cursor: pointer; transition: all 0.2s; font-family: inherit;
+  box-shadow: 0 0 20px rgba(0,210,106,0.25);
+  display: flex; align-items: center; gap: 8px;
+}
+.btn-run:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 0 32px rgba(0,210,106,0.45);
+}
+.btn-run:disabled { background: #1c2d40; color: var(--muted); box-shadow: none; cursor: not-allowed; }
+.btn-run.pulsing { animation: runPulse 2s ease-in-out infinite; }
+@keyframes runPulse {
+  0%,100% { box-shadow: 0 0 20px rgba(0,210,106,0.25); }
+  50%      { box-shadow: 0 0 40px rgba(0,210,106,0.6); }
+}
+.btn-export {
+  background: transparent; border: 1px solid var(--border);
+  color: var(--muted); border-radius: 8px; padding: 7px 14px;
+  font-size: 0.82rem; cursor: pointer; transition: all 0.2s; font-family: inherit;
+}
+.btn-export:hover { border-color: var(--blue); color: var(--blue); }
+.btn-export:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── SIDEBAR ── */
+.sidebar {
+  position: fixed; top: var(--nav); left: 0; bottom: 0;
+  width: var(--sidebar);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  overflow-y: auto; padding: 20px 16px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+.sidebar::-webkit-scrollbar { width: 4px; }
+.sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.sb-label {
+  font-size: 0.65rem; text-transform: uppercase; letter-spacing: 2px;
+  color: var(--muted); font-weight: 700; margin-bottom: 10px;
+}
+.sb-stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(28,45,64,0.6); }
+.sb-stat:last-child { border-bottom: none; }
+.sb-stat-label { font-size: 0.78rem; color: var(--muted); }
+.sb-stat-val { font-size: 0.88rem; font-weight: 700; color: var(--text); }
+.tier-block {
+  padding: 8px 12px; border-radius: 7px; margin-bottom: 6px;
+  font-size: 0.75rem; font-weight: 600;
+}
+.tier-green { background: rgba(0,210,106,0.07); border: 1px solid rgba(0,210,106,0.18); color: var(--green); }
+.tier-balanced { background: rgba(240,165,0,0.07); border: 1px solid rgba(240,165,0,0.18); color: var(--yellow); }
+.tier-perf { background: rgba(231,76,60,0.07); border: 1px solid rgba(231,76,60,0.18); color: var(--red); }
+.tier-block .tier-name { font-weight: 700; margin-bottom: 3px; }
+.tier-block .tier-servers { font-size: 0.68rem; opacity: 0.8; font-weight: 400; }
+
+/* ── MAIN ── */
+.main {
+  margin-left: var(--sidebar);
+  padding-top: var(--nav);
+  min-height: 100vh;
+}
+.main-inner { padding: 24px; }
+
+/* ── TAB BAR ── */
+.tab-bar {
+  display: flex; gap: 2px; padding: 4px;
+  background: var(--surface); border-radius: 10px;
+  margin-bottom: 24px; border: 1px solid var(--border);
+}
+.tab-btn {
+  flex: 1; background: transparent; border: none;
+  color: var(--muted); padding: 9px 8px; border-radius: 7px;
+  font-size: 0.79rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; font-family: inherit; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { background: var(--card); color: var(--green); box-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+
+/* ── CARDS ── */
+.card {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; overflow: hidden;
+}
+.card-header {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  font-size: 0.8rem; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-body { padding: 18px; }
+
+/* ── KPI CARDS ── */
+.kpi {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px;
+  position: relative; overflow: hidden; transition: border-color 0.2s;
+}
+.kpi::after {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 2px;
+}
+.kpi-g::after  { background: linear-gradient(90deg, var(--green), transparent); }
+.kpi-b::after  { background: linear-gradient(90deg, var(--blue), transparent); }
+.kpi-y::after  { background: linear-gradient(90deg, var(--yellow), transparent); }
+.kpi-r::after  { background: linear-gradient(90deg, var(--red), transparent); }
+.kpi-p::after  { background: linear-gradient(90deg, #a78bfa, transparent); }
+.kpi-icon { position: absolute; top: 16px; right: 16px; font-size: 1.6rem; opacity: 0.08; }
+.kpi-label { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); margin-bottom: 8px; font-weight: 600; }
+.kpi-value { font-size: 1.9rem; font-weight: 900; line-height: 1; color: var(--text); }
+.kpi-unit  { font-size: 0.72rem; color: var(--muted); margin-top: 5px; }
+.kpi-delta { font-size: 0.72rem; margin-top: 4px; font-weight: 600; }
+.delta-up   { color: var(--green); }
+.delta-down { color: var(--red); }
+
+/* ── SCORE GAUGE ── */
+.gauge-wrap { position: relative; max-width: 180px; margin: 0 auto; }
+.gauge-center {
+  position: absolute; bottom: 8px; width: 100%; text-align: center;
+}
+.gauge-score { font-size: 2.2rem; font-weight: 900; }
+.gauge-sub   { font-size: 0.65rem; color: var(--muted); font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+
+/* ── TABLES ── */
+.gm-table { width: 100%; border-collapse: collapse; }
+.gm-table th {
+  font-size: 0.67rem; text-transform: uppercase; letter-spacing: 1px;
+  color: var(--muted); padding: 10px 14px; border-bottom: 1px solid var(--border);
+  font-weight: 700; white-space: nowrap; text-align: left;
+}
+.gm-table td {
+  padding: 10px 14px; font-size: 0.82rem;
+  border-bottom: 1px solid rgba(28,45,64,0.4);
+}
+.gm-table tr:last-child td { border-bottom: none; }
+.gm-table tbody tr:hover td { background: rgba(255,255,255,0.018); }
+.gm-table .mono { font-family: 'Courier New', monospace; font-size: 0.78rem; }
+
+/* ── BADGES ── */
+.badge-prio {
+  font-size: 0.67rem; font-weight: 700; padding: 3px 8px;
+  border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;
+}
+.bg-green  { background: rgba(0,210,106,0.12); color: var(--green); border: 1px solid rgba(0,210,106,0.22); }
+.bg-bal    { background: rgba(240,165,0,0.12);  color: var(--yellow); border: 1px solid rgba(240,165,0,0.22); }
+.bg-perf   { background: rgba(231,76,60,0.12);  color: var(--red); border: 1px solid rgba(231,76,60,0.22); }
+.chosen-star { color: var(--green); font-size: 0.85rem; }
+
+/* ── JOB PANEL (slide-in) ── */
+.job-panel-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  z-index: 1100; display: none; backdrop-filter: blur(4px);
+}
+.job-panel-overlay.open { display: block; }
+.job-panel {
+  position: fixed; top: 0; right: -480px; bottom: 0; width: 460px;
+  background: var(--surface); border-left: 1px solid var(--border);
+  z-index: 1200; overflow-y: auto; padding: 28px 24px;
+  transition: right 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+.job-panel.open { right: 0; }
+.panel-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; }
+.panel-title { font-size: 1.1rem; font-weight: 800; }
+.panel-close { background: none; border: 1px solid var(--border); color: var(--muted); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-family: inherit; font-size: 0.85rem; transition: all 0.2s; }
+.panel-close:hover { border-color: var(--red); color: var(--red); }
+.form-label { font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; display: block; }
+.form-ctrl {
+  width: 100%; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 10px 14px;
+  font-size: 0.87rem; font-family: inherit; outline: none; transition: border-color 0.2s;
+}
+.form-ctrl:focus { border-color: var(--green); }
+.form-ctrl option { background: var(--bg); }
+.range-wrap { position: relative; }
+.range-wrap input[type=range] {
+  width: 100%; appearance: none; background: var(--border); height: 5px; border-radius: 3px; outline: none;
+}
+.range-wrap input[type=range]::-webkit-slider-thumb {
+  appearance: none; width: 16px; height: 16px; border-radius: 50%;
+  background: var(--green); cursor: pointer;
+}
+.range-val { position: absolute; right: 0; top: -22px; font-size: 0.78rem; color: var(--green); font-weight: 700; }
+.tmpl-row { display: flex; gap: 8px; margin-bottom: 20px; }
+.tmpl-btn {
+  flex: 1; background: var(--bg); border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; padding: 10px 6px;
+  font-size: 0.75rem; font-weight: 600; cursor: pointer;
+  transition: all 0.2s; font-family: inherit; text-align: center;
+}
+.tmpl-btn:hover { border-color: var(--green); color: var(--green); background: var(--glow); }
+.routing-hint {
+  background: rgba(0,210,106,0.06); border: 1px solid rgba(0,210,106,0.18);
+  border-radius: 8px; padding: 10px 14px; font-size: 0.78rem;
+  color: var(--green); margin: 14px 0; line-height: 1.6;
+}
+.btn-submit {
+  width: 100%; background: linear-gradient(135deg, var(--green), var(--green2));
+  border: none; color: #000; padding: 13px; border-radius: 8px;
+  font-size: 0.92rem; font-weight: 800; cursor: pointer; font-family: inherit;
+  transition: all 0.2s; margin-top: 20px;
+}
+.btn-submit:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,210,106,0.3); }
+.divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+.upload-area {
+  border: 2px dashed var(--border); border-radius: 10px; padding: 20px;
+  text-align: center; cursor: pointer; transition: all 0.2s;
+  background: var(--bg);
+}
+.upload-area:hover { border-color: var(--green); background: var(--glow); }
+.upload-area input { display: none; }
+.upload-icon { font-size: 1.8rem; color: var(--muted); margin-bottom: 8px; }
+.upload-text { font-size: 0.78rem; color: var(--muted); }
+
+/* ── XAI ── */
+.xai-box {
+  background: linear-gradient(135deg, rgba(0,210,106,0.04), rgba(79,156,249,0.04));
+  border: 1px solid rgba(0,210,106,0.18); border-radius: 10px;
+  padding: 18px 20px; font-size: 0.87rem; line-height: 1.75; color: var(--text);
+}
+.score-bar-wrap { height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.score-bar { height: 100%; border-radius: 3px; transition: width 0.8s ease; }
+.server-score-row { padding: 10px 0; border-bottom: 1px solid rgba(28,45,64,0.5); }
+.server-score-row:last-child { border-bottom: none; }
+.server-name { font-size: 0.82rem; font-weight: 600; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+
+/* ── SUSTAINABILITY RATING ── */
+.rating-banner {
+  border-radius: 12px; padding: 18px 22px; margin-top: 20px;
+}
+.rating-banner .rating-title { font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; }
+.rating-banner .rating-text  { font-size: 0.84rem; line-height: 1.6; opacity: 0.85; }
+
+/* ── TOAST ── */
+#toast-container {
+  position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.toast-item {
+  padding: 13px 18px; border-radius: 10px; font-size: 0.83rem; font-weight: 500;
+  backdrop-filter: blur(12px); max-width: 340px; animation: toastIn 0.3s ease;
+  display: flex; align-items: center; gap: 10px; border: 1px solid;
+}
+.toast-success { background: rgba(0,210,106,0.12); border-color: rgba(0,210,106,0.3); color: #7effc0; }
+.toast-error   { background: rgba(231,76,60,0.12);  border-color: rgba(231,76,60,0.3);  color: #ff9e97; }
+.toast-info    { background: rgba(79,156,249,0.12); border-color: rgba(79,156,249,0.3); color: #9ac5ff; }
+@keyframes toastIn { from { opacity:0; transform: translateX(40px); } to { opacity:1; transform: translateX(0); } }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+.empty .ei { font-size: 3rem; opacity: 0.25; margin-bottom: 14px; }
+.empty p   { font-size: 0.88rem; }
+
+/* ── MISC ── */
+.chart-wrap { position: relative; }
+.chart-wrap canvas { border-radius: 6px; }
+.text-green  { color: var(--green) !important; }
+.text-blue   { color: var(--blue) !important; }
+.text-yellow { color: var(--yellow) !important; }
+.text-red    { color: var(--red) !important; }
+.text-muted  { color: var(--muted) !important; }
+.fw-800 { font-weight: 800; }
+.section { display: none; }
+.section.active { display: block; }
+.row { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.col { flex: 1; min-width: 0; }
+.col-2 { flex: 2; min-width: 0; }
+.col-3 { flex: 3; min-width: 0; }
+.spinner { display: inline-block; width:14px; height:14px; border: 2px solid rgba(0,0,0,0.3); border-top-color: #000; border-radius:50%; animation: spin 0.7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.overflow-auto { overflow: auto; }
+.mb-4 { margin-bottom: 16px; }
+.mb-8 { margin-bottom: 8px; }
+.mt-4 { margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<!-- ════════════════ NAVBAR ════════════════ -->
+<nav class="gm-nav">
+  <a href="#" class="brand"><span class="brand-icon">🌱</span> GreenMind</a>
+
+  <div class="carbon-pill" id="carbonPill">
+    <span class="cdot" id="carbonDot" style="background:var(--muted)"></span>
+    <span id="carbonText">Checking carbon…</span>
+  </div>
+
+  <div class="queue-info">
+    Queue: <span class="q-badge" id="qBadge">0</span>
+  </div>
+
+  <div class="nav-spacer"></div>
+
+  <button class="btn-add" onclick="openPanel()"><i class="fa fa-plus"></i> New Job</button>
+  <button class="btn-run" id="btnRun" onclick="runScheduler()" disabled>
+    <span id="btnRunIcon"><i class="fa fa-play"></i></span>
+    <span id="btnRunText">Run Scheduler</span>
+  </button>
+  <button class="btn-export" id="btnExport" onclick="exportCSV()" disabled title="Export results">
+    <i class="fa fa-download"></i>
+  </button>
+</nav>
+
+<!-- ════════════════ SIDEBAR ════════════════ -->
+<aside class="sidebar">
+  <div>
+    <div class="sb-label">Live Stats</div>
+    <div class="sb-stat"><span class="sb-stat-label">Total Jobs</span><span class="sb-stat-val text-green" id="sbTotal">0</span></div>
+    <div class="sb-stat"><span class="sb-stat-label">Avg Reward</span><span class="sb-stat-val" id="sbReward">—</span></div>
+    <div class="sb-stat"><span class="sb-stat-label">Total Energy</span><span class="sb-stat-val" id="sbEnergy">—</span></div>
+    <div class="sb-stat"><span class="sb-stat-label">Total CO₂</span><span class="sb-stat-val" id="sbCO2">—</span></div>
+    <div class="sb-stat"><span class="sb-stat-label">Green Jobs</span><span class="sb-stat-val text-green" id="sbGreen">—</span></div>
+    <div class="sb-stat"><span class="sb-stat-label">Sustainability</span><span class="sb-stat-val text-green fw-800" id="sbSustain">—</span></div>
+  </div>
+  <div>
+    <div class="sb-label">Server Tier Pools</div>
+    <div id="tierMap">
+      <div class="tier-block tier-green"><div class="tier-name">🌿 Green</div><div class="tier-servers">Loading…</div></div>
+      <div class="tier-block tier-balanced"><div class="tier-name">⚖️ Balanced</div><div class="tier-servers">Loading…</div></div>
+      <div class="tier-block tier-perf"><div class="tier-name">⚡ Performance</div><div class="tier-servers">Loading…</div></div>
+    </div>
+  </div>
+  <div>
+    <div class="sb-label">Carbon Recommendation</div>
+    <div id="sbCarbonRec" style="font-size:0.78rem;color:var(--muted);line-height:1.6">—</div>
+  </div>
+</aside>
+
+<!-- ════════════════ MAIN ════════════════ -->
+<main class="main">
+<div class="main-inner">
+
+  <!-- Tab bar -->
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="showTab('overview')"><i class="fa fa-gauge-high fa-sm"></i> Overview</button>
+    <button class="tab-btn" onclick="showTab('jobs')"><i class="fa fa-list fa-sm"></i> Jobs</button>
+    <button class="tab-btn" onclick="showTab('analytics')"><i class="fa fa-chart-bar fa-sm"></i> Analytics</button>
+    <button class="tab-btn" onclick="showTab('xai')"><i class="fa fa-brain fa-sm"></i> Explainable AI</button>
+    <button class="tab-btn" onclick="showTab('sustain')"><i class="fa fa-leaf fa-sm"></i> Sustainability</button>
+  </div>
+
+  <!-- ═══ OVERVIEW ═══ -->
+  <div class="section active" id="tab-overview">
+    <!-- KPIs -->
+    <div class="row mb-4">
+      <div class="col">
+        <div class="kpi kpi-g">
+          <div class="kpi-icon"><i class="fa fa-star"></i></div>
+          <div class="kpi-label">Sustainability Score</div>
+          <div class="kpi-value" id="kpiSustain" style="color:var(--green)">—</div>
+          <div class="kpi-unit">/ 100</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="kpi kpi-b">
+          <div class="kpi-icon"><i class="fa fa-server"></i></div>
+          <div class="kpi-label">Jobs Scheduled</div>
+          <div class="kpi-value" id="kpiJobs">0</div>
+          <div class="kpi-unit">total</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="kpi kpi-p">
+          <div class="kpi-icon"><i class="fa fa-trophy"></i></div>
+          <div class="kpi-label">Avg Reward</div>
+          <div class="kpi-value" id="kpiReward">—</div>
+          <div class="kpi-unit">0–1 score</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="kpi kpi-y">
+          <div class="kpi-icon"><i class="fa fa-bolt"></i></div>
+          <div class="kpi-label">Total Energy</div>
+          <div class="kpi-value" id="kpiEnergy">—</div>
+          <div class="kpi-unit">kWh consumed</div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="kpi kpi-r">
+          <div class="kpi-icon"><i class="fa fa-leaf"></i></div>
+          <div class="kpi-label">CO₂ Avoided (est.)</div>
+          <div class="kpi-value" id="kpiCO2">—</div>
+          <div class="kpi-unit">tCO2 vs baseline</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row 1 -->
+    <div class="row">
+      <div class="col-2">
+        <div class="card">
+          <div class="card-header">Reward Timeline</div>
+          <div class="card-body">
+            <div class="chart-wrap" style="height:220px"><canvas id="chartReward"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Server Distribution</div>
+          <div class="card-body">
+            <div class="chart-wrap" style="height:220px"><canvas id="chartDoughnut"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Charts row 2 -->
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Carbon Intensity Over Time</div>
+          <div class="card-body">
+            <div class="chart-wrap" style="height:180px"><canvas id="chartCarbon"></canvas></div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Priority Breakdown</div>
+          <div class="card-body">
+            <div class="chart-wrap" style="height:180px"><canvas id="chartPriority"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="overviewEmpty" class="empty" style="display:none">
+      <div class="ei"><i class="fa fa-chart-line"></i></div>
+      <p>No data yet — add jobs and run the scheduler to see live metrics.</p>
+    </div>
+  </div>
+
+  <!-- ═══ JOBS ═══ -->
+  <div class="section" id="tab-jobs">
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <div class="card-header">
+            Pending Queue
+            <button onclick="clearQueue()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:3px 10px;font-size:0.72rem;cursor:pointer;font-family:inherit;">Clear</button>
+          </div>
+          <div class="overflow-auto">
+            <table class="gm-table" id="queueTable">
+              <thead><tr>
+                <th>ID</th><th>Priority</th><th>Latency</th><th>CPU %</th><th>Mem %</th>
+              </tr></thead>
+              <tbody id="queueBody"></tbody>
+            </table>
+            <div id="queueEmpty" class="empty"><div class="ei"><i class="fa fa-inbox"></i></div><p>Queue is empty — add jobs from the top right.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:16px">
+      <div class="col">
+        <div class="card">
+          <div class="card-header">
+            Completed Jobs
+            <button onclick="clearHistory()" style="background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:3px 10px;font-size:0.72rem;cursor:pointer;font-family:inherit;">Clear History</button>
+          </div>
+          <div class="overflow-auto" style="max-height:400px">
+            <table class="gm-table" id="historyTable">
+              <thead><tr>
+                <th>ID</th><th>Priority</th><th>Latency</th><th>Server</th>
+                <th>Reward</th><th>Energy kWh</th><th>CO₂</th><th>Cost</th>
+              </tr></thead>
+              <tbody id="historyBody"></tbody>
+            </table>
+            <div id="historyEmpty" class="empty"><div class="ei"><i class="fa fa-clock-rotate-left"></i></div><p>No completed jobs yet.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ ANALYTICS ═══ -->
+  <div class="section" id="tab-analytics">
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Avg Reward per Server</div>
+          <div class="card-body"><div class="chart-wrap" style="height:200px"><canvas id="chartAvgReward"></canvas></div></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Energy & CO₂ by Server</div>
+          <div class="card-body"><div class="chart-wrap" style="height:200px"><canvas id="chartEnergyCO2"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Priority → Server Routing (%)</div>
+          <div class="card-body"><div class="chart-wrap" style="height:200px"><canvas id="chartPriorityRoute"></canvas></div></div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Energy Intensity Distribution</div>
+          <div class="card-body"><div class="chart-wrap" style="height:200px"><canvas id="chartEnergyDist"></canvas></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col">
+        <div class="card">
+          <div class="card-header">Full History</div>
+          <div class="overflow-auto" style="max-height:350px">
+            <table class="gm-table">
+              <thead><tr>
+                <th>ID</th><th>Priority</th><th>Server</th><th>Reward</th>
+                <th>kWh</th><th>CO₂</th><th>Load</th><th>Carbon Factor</th>
+              </tr></thead>
+              <tbody id="analyticsBody"></tbody>
+            </table>
+            <div id="analyticsEmpty" class="empty"><div class="ei"><i class="fa fa-table"></i></div><p>Run the scheduler to see data.</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ XAI ═══ -->
+  <div class="section" id="tab-xai">
+    <div id="xaiEmpty" class="empty">
+      <div class="ei"><i class="fa fa-brain"></i></div>
+      <p>Run the scheduler first, then select a job to see the AI explanation.</p>
+    </div>
+    <div id="xaiContent" style="display:none">
+      <div class="row mb-4" style="align-items:center">
+        <div class="col">
+          <label class="form-label">Select a Scheduled Job</label>
+          <select class="form-ctrl" id="xaiSelect" onchange="renderXAI()"></select>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-2">
+          <div class="card mb-4">
+            <div class="card-header"><i class="fa fa-comment-dots"></i> &nbsp;LLM Explanation</div>
+            <div class="card-body">
+              <div class="xai-box" id="xaiExplanation">—</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Score Breakdown</div>
+            <div class="card-body" id="xaiScoreBreakdown"></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card mb-4">
+            <div class="card-header">Score Radar</div>
+            <div class="card-body">
+              <div class="chart-wrap" style="height:240px"><canvas id="chartRadar"></canvas></div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-header">Priority Weights</div>
+            <div class="card-body">
+              <div class="chart-wrap" style="height:130px"><canvas id="chartWeights"></canvas></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card mt-4">
+        <div class="card-header">Tier Routing Explanation</div>
+        <div class="card-body">
+          <div class="xai-box">
+            <strong>Why tier pools?</strong> Without pools, the most powerful server wins every metric after normalisation — performance, latency, and often cost too. Tier pools enforce sustainability: 🌿 green jobs run on efficient small servers (lowest CO₂ + cost), ⚡ performance jobs get powerful large servers, and ⚖️ balanced jobs use mid-tier hardware. Each RL agent then fine-tunes the decision within its pool based on real-time carbon and load signals.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ SUSTAINABILITY ═══ -->
+  <div class="section" id="tab-sustain">
+    <div id="sustainEmpty" class="empty">
+      <div class="ei"><i class="fa fa-leaf"></i></div>
+      <p>Schedule some jobs to see sustainability metrics.</p>
+    </div>
+    <div id="sustainContent" style="display:none">
+      <!-- Gauge + KPIs -->
+      <div class="row mb-4" style="align-items:stretch">
+        <div class="col" style="max-width:260px;flex:none">
+          <div class="card" style="height:100%;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:28px">
+            <div style="font-size:0.68rem;text-transform:uppercase;letter-spacing:2px;color:var(--muted);margin-bottom:16px;font-weight:700">Sustainability Score</div>
+            <div class="gauge-wrap" style="width:180px">
+              <canvas id="chartGauge" height="100"></canvas>
+              <div class="gauge-center">
+                <div class="gauge-score text-green" id="gaugeScore">—</div>
+                <div class="gauge-sub">/ 100</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="row" style="height:100%">
+            <div class="col">
+              <div class="kpi kpi-g" style="height:100%">
+                <div class="kpi-icon"><i class="fa fa-cloud"></i></div>
+                <div class="kpi-label">CO₂ Avoided (est.)</div>
+                <div class="kpi-value text-green" id="sCO2Avoided">—</div>
+                <div class="kpi-unit">tCO2 vs all-performance</div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="kpi kpi-b" style="height:100%">
+                <div class="kpi-icon"><i class="fa fa-seedling"></i></div>
+                <div class="kpi-label">Green Job Share</div>
+                <div class="kpi-value" id="sGreenPct">—</div>
+                <div class="kpi-unit" id="sGreenCount">—</div>
+              </div>
+            </div>
+            <div class="col">
+              <div class="kpi kpi-y" style="height:100%">
+                <div class="kpi-icon"><i class="fa fa-server"></i></div>
+                <div class="kpi-label">Most Efficient Server</div>
+                <div class="kpi-value" id="sBestServer" style="font-size:1.2rem">—</div>
+                <div class="kpi-unit" id="sBestKwh">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col">
+          <div class="card">
+            <div class="card-header">Cumulative CO₂ Over Time</div>
+            <div class="card-body"><div class="chart-wrap" style="height:200px"><canvas id="chartCumCO2"></canvas></div></div>
+          </div>
+        </div>
+        <div class="col">
+          <div class="card">
+            <div class="card-header">CO₂ by Priority</div>
+            <div class="card-body"><div class="chart-wrap" style="height:200px"><canvas id="chartCO2Priority"></canvas></div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:16px">
+        <div class="card-header">Energy Efficiency per Server (avg kWh/job)</div>
+        <div class="card-body"><div class="chart-wrap" style="height:180px"><canvas id="chartServerEff"></canvas></div></div>
+      </div>
+
+      <div id="ratingBanner" class="rating-banner mt-4"></div>
+    </div>
+  </div>
+
+</div>
+</main>
+
+<!-- ════════════════ JOB PANEL ════════════════ -->
+<div class="job-panel-overlay" id="panelOverlay" onclick="closePanel()"></div>
+<div class="job-panel" id="jobPanel">
+  <div class="panel-header">
+    <div class="panel-title">🌱 Add New Job</div>
+    <button class="panel-close" onclick="closePanel()">✕ Close</button>
+  </div>
+
+  <div class="tmpl-row">
+    <button class="tmpl-btn" onclick="applyTemplate('green')">🌿<br><span style="color:var(--green)">Green</span></button>
+    <button class="tmpl-btn" onclick="applyTemplate('balanced')">⚖️<br><span style="color:var(--yellow)">Balanced</span></button>
+    <button class="tmpl-btn" onclick="applyTemplate('performance')">⚡<br><span style="color:var(--red)">Performance</span></button>
+  </div>
+
+  <div class="mb-4">
+    <label class="form-label">Priority</label>
+    <select class="form-ctrl" id="fPriority" onchange="updateRoutingHint()">
+      <option value="balanced">⚖️ Balanced — even tradeoffs</option>
+      <option value="green">🌿 Green — lowest CO₂ + cost</option>
+      <option value="performance">⚡ Performance — max throughput</option>
+    </select>
+  </div>
+
+  <div class="mb-4">
+    <label class="form-label">Latency Tolerance</label>
+    <select class="form-ctrl" id="fLatency">
+      <option value="medium">Medium</option>
+      <option value="low">Low — delay tolerant</option>
+      <option value="high">High — time sensitive</option>
+    </select>
+  </div>
+
+  <div class="mb-4">
+    <label class="form-label">CPU Demand</label>
+    <div class="range-wrap" style="padding-top:22px">
+      <span class="range-val" id="cpuVal">50%</span>
+      <input type="range" min="0" max="100" value="50" id="fCPU" oninput="document.getElementById('cpuVal').textContent=this.value+'%'">
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <label class="form-label">Memory Demand</label>
+    <div class="range-wrap" style="padding-top:22px">
+      <span class="range-val" id="memVal">50%</span>
+      <input type="range" min="0" max="100" value="50" id="fMem" oninput="document.getElementById('memVal').textContent=this.value+'%'">
+    </div>
+  </div>
+
+  <div class="routing-hint" id="routingHint">Loading tier info…</div>
+
+  <button class="btn-submit" onclick="submitJob()"><i class="fa fa-plus"></i> Submit Job</button>
+
+  <hr class="divider">
+
+  <div class="mb-4">
+    <label class="form-label">Bulk CSV Upload</label>
+    <div class="upload-area" onclick="document.getElementById('csvInput').click()">
+      <div class="upload-icon"><i class="fa fa-file-csv"></i></div>
+      <div class="upload-text">Click to upload jobs.csv<br><small>Columns: priority, latency (optional: cpu, mem)</small></div>
+      <input type="file" id="csvInput" accept=".csv" onchange="uploadCSV(this)">
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════ TOASTS ════════════════ -->
+<div id="toast-container"></div>
+
+<script>
+const API = 'http://127.0.0.1:8000';
+let history = JSON.parse(localStorage.getItem('gm_history') || '[]');
+let queue   = JSON.parse(localStorage.getItem('gm_queue')   || '[]');
+let tierPools = {};
+let charts = {};
+
+// ── CHART DEFAULTS ────────────────────────────────────────────────
+Chart.defaults.color = '#6b7d8f';
+Chart.defaults.font.family = 'Inter';
+Chart.defaults.plugins.legend.labels.color = '#e8f0f8';
+
+const TOOLTIP_DEFAULTS = {
+  backgroundColor: '#0d1421',
+  borderColor: '#1c2d40',
+  borderWidth: 1,
+  titleColor: '#e8f0f8',
+  bodyColor: '#6b7d8f',
+  padding: 10,
+  cornerRadius: 8,
+};
+const GRID = { color: '#1c2d40', lineWidth: 1 };
+const TICK = { color: '#6b7d8f', font: { size: 10 } };
+
+function makeGrad(ctx, c1, c2) {
+  const g = ctx.createLinearGradient(0, 0, 0, ctx.canvas.offsetHeight || 200);
+  g.addColorStop(0, c1); g.addColorStop(1, c2);
+  return g;
+}
+
+// ── STATE HELPERS ─────────────────────────────────────────────────
+function save() {
+  localStorage.setItem('gm_history', JSON.stringify(history));
+  localStorage.setItem('gm_queue',   JSON.stringify(queue));
+}
+
+function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+
+function calcSustainability(h) {
+  if (!h.length) return 0;
+  const avgReward  = avg(h.map(j => j.reward));
+  const greenRatio = h.filter(j => j.priority === 'green').length / h.length;
+  const avgCarbon  = avg(h.map(j => j.state.carbon_factor));
+  const carbonScore= 1 - avgCarbon;
+  const co2vals    = h.map(j => j.co2);
+  const co2min     = Math.min(...co2vals), co2max = Math.max(...co2vals);
+  const avgCo2     = avg(co2vals);
+  const co2eff     = co2max > co2min ? 1 - (avgCo2 - co2min)/(co2max - co2min) : 0.6;
+  const score = (avgReward*0.30 + greenRatio*0.25 + carbonScore*0.25 + co2eff*0.20) * 100;
+  return Math.min(100, Math.max(0, Math.round(score*10)/10));
+}
+
+function priorityBadge(p) {
+  const cls = p==='green'?'bg-green':p==='balanced'?'bg-bal':'bg-perf';
+  const em  = p==='green'?'🌿':p==='balanced'?'⚖️':'⚡';
+  return `<span class="badge-prio ${cls}">${em} ${p}</span>`;
+}
+
+function co2Avoided(h) {
+  if (!h.length) return 0;
+  const baseline = h.reduce((s,j) => s + j.co2 * (1 + (1 - j.state.carbon_factor)), 0);
+  return Math.max(0, baseline - h.reduce((s,j) => s+j.co2, 0));
+}
+
+// ── TOAST ─────────────────────────────────────────────────────────
+function toast(msg, type='success') {
+  const ic = type==='success'?'check-circle':type==='error'?'exclamation-triangle':'info-circle';
+  const el = document.createElement('div');
+  el.className = `toast-item toast-${type}`;
+  el.innerHTML = `<i class="fa fa-${ic}"></i> ${msg}`;
+  document.getElementById('toast-container').appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ── TABS ─────────────────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-'+name).classList.add('active');
+  event.currentTarget.classList.add('active');
+  if (name==='overview')  renderOverview();
+  if (name==='analytics') renderAnalytics();
+  if (name==='xai')       renderXAITab();
+  if (name==='sustain')   renderSustainability();
+  if (name==='jobs')      renderJobsTables();
+}
+
+// ── PANEL ─────────────────────────────────────────────────────────
+function openPanel() {
+  document.getElementById('panelOverlay').classList.add('open');
+  document.getElementById('jobPanel').classList.add('open');
+  updateRoutingHint();
+}
+function closePanel() {
+  document.getElementById('panelOverlay').classList.remove('open');
+  document.getElementById('jobPanel').classList.remove('open');
+}
+function applyTemplate(p) {
+  document.getElementById('fPriority').value = p;
+  document.getElementById('fLatency').value  = p==='performance'?'high':p==='green'?'low':'medium';
+  document.getElementById('fCPU').value = p==='performance'?80:p==='green'?20:50;
+  document.getElementById('cpuVal').textContent = (p==='performance'?80:p==='green'?20:50)+'%';
+  document.getElementById('fMem').value = p==='performance'?80:p==='green'?20:50;
+  document.getElementById('memVal').textContent = (p==='performance'?80:p==='green'?20:50)+'%';
+  updateRoutingHint();
+}
+function updateRoutingHint() {
+  const p = document.getElementById('fPriority').value;
+  const pool = tierPools[p] || [];
+  const color = p==='green'?'var(--green)':p==='balanced'?'var(--yellow)':'var(--red)';
+  const em = p==='green'?'🌿':p==='balanced'?'⚖️':'⚡';
+  document.getElementById('routingHint').innerHTML =
+    `${em} This job will be routed to: <strong style="color:${color}">${pool.join(', ') || '…'}</strong>`;
+}
+
+// ── SUBMIT JOB ────────────────────────────────────────────────────
+async function submitJob() {
+  const payload = {
+    priority: document.getElementById('fPriority').value,
+    latency:  document.getElementById('fLatency').value,
+  };
+  try {
+    const r = await fetch(`${API}/submit`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const d = await r.json();
+    if (d.status === 'already_submitted') { toast('Job already in queue', 'info'); return; }
+    queue.push({
+      job_id:   d.job_id,
+      priority: payload.priority,
+      latency:  payload.latency,
+      cpu:      document.getElementById('fCPU').value,
+      mem:      document.getElementById('fMem').value,
+    });
+    save();
+    updateQueueBadge();
+    renderJobsTables();
+    toast(`Job #${d.job_id} added to queue ✓`, 'success');
+    closePanel();
+  } catch(e) { toast('Failed to connect to API', 'error'); }
+}
+
+// ── RUN SCHEDULER ─────────────────────────────────────────────────
+async function runScheduler() {
+  const btn = document.getElementById('btnRun');
+  const icon = document.getElementById('btnRunIcon');
+  const text = document.getElementById('btnRunText');
+  btn.disabled = true;
+  btn.classList.remove('pulsing');
+  icon.innerHTML = '<span class="spinner"></span>';
+  text.textContent = 'Running…';
+  try {
+    const r = await fetch(`${API}/run`, {method:'POST'});
+    const d = await r.json();
+    const jobs = d.scheduled_jobs || [];
+    if (jobs.length) {
+      history.push(...jobs);
+      queue = [];
+      save();
+      updateQueueBadge();
+      updateSidebar();
+      updateNavExport();
+      renderOverview();
+      renderJobsTables();
+      toast(`✓ Scheduled ${jobs.length} job${jobs.length>1?'s':''} successfully`, 'success');
+    } else {
+      toast('No jobs in queue', 'info');
+    }
+  } catch(e) { toast('Scheduler error — is the API running?', 'error'); }
+  icon.innerHTML = '<i class="fa fa-play"></i>';
+  text.textContent = 'Run Scheduler';
+  btn.disabled = queue.length === 0;
+  if (queue.length > 0) btn.classList.add('pulsing');
+}
+
+// ── QUEUE ─────────────────────────────────────────────────────────
+function updateQueueBadge() {
+  const n = queue.length;
+  document.getElementById('qBadge').textContent = n;
+  const btn = document.getElementById('btnRun');
+  btn.disabled = n === 0;
+  if (n > 0) btn.classList.add('pulsing'); else btn.classList.remove('pulsing');
+}
+async function clearQueue() {
+  try { await fetch(`${API}/reset`, {method:'POST'}); } catch {}
+  queue = [];
+  save();
+  updateQueueBadge();
+  renderJobsTables();
+  toast('Queue cleared', 'info');
+}
+function clearHistory() {
+  history = []; queue = [];
+  save();
+  try { fetch(`${API}/reset`, {method:'POST'}); } catch {}
+  updateQueueBadge(); updateSidebar(); updateNavExport();
+  renderOverview(); renderJobsTables(); renderAnalytics();
+  renderSustainability(); renderXAITab();
+  toast('History cleared', 'info');
+}
+
+// ── CSV UPLOAD ─────────────────────────────────────────────────────
+async function uploadCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.trim().split('\n');
+  const headers = lines[0].toLowerCase().split(',');
+  const pIdx = headers.indexOf('priority');
+  const lIdx = headers.indexOf('latency');
+  if (pIdx === -1) { toast('CSV must have a "priority" column', 'error'); return; }
+  let added = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const cols = lines[i].split(',');
+    const payload = {
+      priority: (cols[pIdx]||'balanced').trim(),
+      latency:  lIdx>=0?(cols[lIdx]||'medium').trim():'medium',
+    };
+    try {
+      const r = await fetch(`${API}/submit`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      const d = await r.json();
+      if (!d.status) { queue.push({job_id:d.job_id, ...payload, cpu:50, mem:50}); added++; }
+    } catch {}
+  }
+  save(); updateQueueBadge(); renderJobsTables();
+  toast(`Added ${added} jobs from CSV`, 'success');
+  input.value = '';
+}
+
+// ── EXPORT ─────────────────────────────────────────────────────────
+function updateNavExport() {
+  document.getElementById('btnExport').disabled = history.length === 0;
+}
+function exportCSV() {
+  if (!history.length) return;
+  const cols = ['job_id','chosen_dc','priority','latency','reward','power_kwh','cost','co2','load','carbon_factor','load_type','day_of_week'];
+  const rows = history.map(j => [
+    j.job_id, j.chosen_dc, j.priority, j.latency,
+    j.reward, j.power_kwh, j.cost, j.co2,
+    j.state.load, j.state.carbon_factor, j.state.load_type, j.state.day_of_week
+  ].join(','));
+  const csv = [cols.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'greenmind_results.csv'; a.click();
+  toast('Exported results.csv', 'success');
+}
+
+// ── SIDEBAR ────────────────────────────────────────────────────────
+function updateSidebar() {
+  const h = history;
+  document.getElementById('sbTotal').textContent  = h.length;
+  document.getElementById('sbReward').textContent = h.length ? avg(h.map(j=>j.reward)).toFixed(3) : '—';
+  document.getElementById('sbEnergy').textContent = h.length ? avg(h.map(j=>j.power_kwh)).toFixed(4)+' kWh' : '—';
+  document.getElementById('sbCO2').textContent    = h.length ? h.reduce((s,j)=>s+j.co2,0).toFixed(5)+' t' : '—';
+  const grn = h.filter(j=>j.priority==='green').length;
+  document.getElementById('sbGreen').textContent  = h.length ? `${grn}/${h.length} (${Math.round(grn/h.length*100)}%)` : '—';
+  const ss = calcSustainability(h);
+  const el = document.getElementById('sbSustain');
+  el.textContent = h.length ? ss+'/100' : '—';
+  el.style.color = ss>=70?'var(--green)':ss>=40?'var(--yellow)':'var(--red)';
+}
+
+async function loadCarbonStatus() {
+  try {
+    const r = await fetch(`${API}/sustainability`);
+    const d = await r.json();
+    const cf = d.carbon_factor;
+    const dot = document.getElementById('carbonDot');
+    const txt = document.getElementById('carbonText');
+    const rec = document.getElementById('sbCarbonRec');
+    if (cf < 0.33) { dot.style.background='var(--green)'; txt.textContent='Low Carbon'; }
+    else if (cf < 0.66) { dot.style.background='var(--yellow)'; txt.textContent='Moderate Carbon'; }
+    else { dot.style.background='var(--red)'; txt.textContent='High Carbon'; }
+    rec.innerHTML = `${d.message}<br><strong style="color:var(--green);margin-top:6px;display:block">Suggest: ${d.recommendation}</strong>`;
+  } catch {
+    document.getElementById('carbonText').textContent='API offline';
+  }
+}
+
+async function loadTierPools() {
+  try {
+    const r = await fetch(`${API}/info`);
+    const d = await r.json();
+    tierPools = d.tier_pools || {};
+    const map = document.getElementById('tierMap');
+    map.innerHTML = '';
+    const styles = {green:'tier-green',balanced:'tier-balanced',performance:'tier-perf'};
+    const ems    = {green:'🌿',balanced:'⚖️',performance:'⚡'};
+    for (const [p, servers] of Object.entries(tierPools)) {
+      map.innerHTML += `<div class="tier-block ${styles[p]}">
+        <div class="tier-name">${ems[p]||''} ${p.charAt(0).toUpperCase()+p.slice(1)}</div>
+        <div class="tier-servers">${servers.join(' · ')}</div>
+      </div>`;
+    }
+    updateRoutingHint();
+  } catch {}
+}
+
+// ── OVERVIEW ──────────────────────────────────────────────────────
+function renderOverview() {
+  const h = history;
+  const hasData = h.length > 0;
+  document.getElementById('overviewEmpty').style.display = hasData ? 'none' : '';
+
+  const ss = calcSustainability(h);
+  document.getElementById('kpiSustain').textContent = hasData ? ss : '—';
+  document.getElementById('kpiSustain').style.color = ss>=70?'var(--green)':ss>=40?'var(--yellow)':'var(--red)';
+  document.getElementById('kpiJobs').textContent    = h.length;
+  document.getElementById('kpiReward').textContent  = hasData ? avg(h.map(j=>j.reward)).toFixed(3) : '—';
+  document.getElementById('kpiEnergy').textContent  = hasData ? h.reduce((s,j)=>s+j.power_kwh,0).toFixed(3) : '—';
+  const avoided = co2Avoided(h);
+  document.getElementById('kpiCO2').textContent = hasData ? avoided.toFixed(5) : '—';
+
+  if (!hasData) { destroyCharts(['chartReward','chartDoughnut','chartCarbon','chartPriority']); return; }
+
+  // Reward timeline
+  const labels = h.map((_,i) => i+1);
+  const rewards = h.map(j => j.reward);
+  const rolling = rewards.map((_,i) => i>=4 ? avg(rewards.slice(i-4,i+1)) : null);
+  destroyChart('chartReward');
+  const cR = document.getElementById('chartReward').getContext('2d');
+  charts.chartReward = new Chart(cR, {
+    type:'line', data:{
+      labels,
+      datasets:[{
+        label:'Reward', data: rewards, tension:0.4, fill:true,
+        borderColor:'#00d26a', borderWidth:2, pointRadius:3, pointBackgroundColor:'#00d26a',
+        backgroundColor: makeGrad(cR,'rgba(0,210,106,0.25)','rgba(0,210,106,0)'),
+      },{
+        label:'5-job avg', data: rolling, tension:0.4, fill:false,
+        borderColor:'#4f9cf9', borderWidth:1.5, borderDash:[5,4],
+        pointRadius:0,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:10}}},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:GRID,ticks:TICK},y:{grid:GRID,ticks:TICK,min:0,max:1}},
+    }
+  });
+
+  // Doughnut
+  const dcCounts = {};
+  h.forEach(j => dcCounts[j.chosen_dc] = (dcCounts[j.chosen_dc]||0)+1);
+  destroyChart('chartDoughnut');
+  charts.chartDoughnut = new Chart(document.getElementById('chartDoughnut').getContext('2d'), {
+    type:'doughnut', data:{
+      labels: Object.keys(dcCounts),
+      datasets:[{data: Object.values(dcCounts),
+        backgroundColor:['#00d26a','#4f9cf9','#f0a500','#e74c3c','#a78bfa','#22d3ee','#fb923c','#f472b6','#34d399'],
+        borderColor:'#0f1a2a', borderWidth:2,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{boxWidth:10,font:{size:10}}},tooltip:{...TOOLTIP_DEFAULTS}},
+      cutout:'68%',
+    }
+  });
+
+  // Carbon
+  destroyChart('chartCarbon');
+  const cC = document.getElementById('chartCarbon').getContext('2d');
+  charts.chartCarbon = new Chart(cC, {
+    type:'line', data:{
+      labels, datasets:[{
+        label:'Carbon Factor', data: h.map(j=>j.state.carbon_factor),
+        tension:0.4, fill:true, borderColor:'#e74c3c', borderWidth:2, pointRadius:2,
+        backgroundColor: makeGrad(cC,'rgba(231,76,60,0.2)','rgba(231,76,60,0)'),
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:GRID,ticks:TICK},y:{grid:GRID,ticks:TICK,min:0,max:1}},
+    }
+  });
+
+  // Priority breakdown
+  const prioCount = {green:0, balanced:0, performance:0};
+  h.forEach(j => prioCount[j.priority]=(prioCount[j.priority]||0)+1);
+  destroyChart('chartPriority');
+  charts.chartPriority = new Chart(document.getElementById('chartPriority').getContext('2d'), {
+    type:'bar', data:{
+      labels: ['Green','Balanced','Performance'],
+      datasets:[{data:[prioCount.green,prioCount.balanced,prioCount.performance],
+        backgroundColor:['rgba(0,210,106,0.7)','rgba(240,165,0,0.7)','rgba(231,76,60,0.7)'],
+        borderColor:['#00d26a','#f0a500','#e74c3c'],
+        borderWidth:1, borderRadius:6,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:GRID,ticks:TICK},y:{grid:{display:false},ticks:TICK}},
+    }
+  });
+}
+
+// ── JOBS TABLES ────────────────────────────────────────────────────
+function renderJobsTables() {
+  // Queue
+  const qBody = document.getElementById('queueBody');
+  const qEmp  = document.getElementById('queueEmpty');
+  if (queue.length) {
+    qEmp.style.display = 'none';
+    qBody.innerHTML = queue.map(j => `<tr>
+      <td class="mono">#${j.job_id}</td>
+      <td>${priorityBadge(j.priority)}</td>
+      <td style="color:var(--muted)">${j.latency}</td>
+      <td style="color:var(--muted)">${j.cpu||'—'}%</td>
+      <td style="color:var(--muted)">${j.mem||'—'}%</td>
+    </tr>`).join('');
+  } else { qEmp.style.display=''; qBody.innerHTML=''; }
+
+  // History
+  const hBody = document.getElementById('historyBody');
+  const hEmp  = document.getElementById('historyEmpty');
+  if (history.length) {
+    hEmp.style.display = 'none';
+    hBody.innerHTML = [...history].reverse().map(j => `<tr>
+      <td class="mono">#${j.job_id}</td>
+      <td>${priorityBadge(j.priority)}</td>
+      <td style="color:var(--muted)">${j.latency}</td>
+      <td><strong style="color:var(--green)">${j.chosen_dc}</strong></td>
+      <td style="color:var(--yellow)">${j.reward.toFixed(3)}</td>
+      <td class="mono">${j.power_kwh.toFixed(4)}</td>
+      <td class="mono">${j.co2.toFixed(5)}</td>
+      <td class="mono">${j.cost.toFixed(5)}</td>
+    </tr>`).join('');
+  } else { hEmp.style.display=''; hBody.innerHTML=''; }
+}
+
+// ── ANALYTICS ─────────────────────────────────────────────────────
+function renderAnalytics() {
+  const h = history;
+  const hasData = h.length > 0;
+  document.getElementById('analyticsEmpty').style.display = hasData?'none':'';
+
+  const aBody = document.getElementById('analyticsBody');
+  if (hasData) {
+    aBody.innerHTML = [...h].reverse().map(j => `<tr>
+      <td class="mono">#${j.job_id}</td>
+      <td>${priorityBadge(j.priority)}</td>
+      <td style="color:var(--green)">${j.chosen_dc}</td>
+      <td style="color:var(--yellow)">${j.reward.toFixed(3)}</td>
+      <td class="mono">${j.power_kwh.toFixed(4)}</td>
+      <td class="mono">${j.co2.toFixed(5)}</td>
+      <td class="mono">${j.state.load.toFixed(3)}</td>
+      <td class="mono">${j.state.carbon_factor.toFixed(3)}</td>
+    </tr>`).join('');
+  }
+
+  if (!hasData) { destroyCharts(['chartAvgReward','chartEnergyCO2','chartPriorityRoute','chartEnergyDist']); return; }
+
+  // Avg reward per server
+  const servers = [...new Set(h.map(j=>j.chosen_dc))].sort();
+  const avgRew  = servers.map(s => avg(h.filter(j=>j.chosen_dc===s).map(j=>j.reward)));
+  destroyChart('chartAvgReward');
+  const cAR = document.getElementById('chartAvgReward').getContext('2d');
+  charts.chartAvgReward = new Chart(cAR, {
+    type:'bar', data:{
+      labels: servers, datasets:[{
+        label:'Avg Reward', data: avgRew, borderRadius:6,
+        backgroundColor: makeGrad(cAR,'rgba(0,210,106,0.8)','rgba(0,163,82,0.4)'),
+        borderColor:'#00d26a', borderWidth:1,
+      }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:TICK,min:0,max:1}},
+    }
+  });
+
+  // Energy + CO2 by server
+  const totEnergy = servers.map(s => h.filter(j=>j.chosen_dc===s).reduce((a,b)=>a+b.power_kwh,0));
+  const totCO2    = servers.map(s => h.filter(j=>j.chosen_dc===s).reduce((a,b)=>a+b.co2,0));
+  destroyChart('chartEnergyCO2');
+  charts.chartEnergyCO2 = new Chart(document.getElementById('chartEnergyCO2').getContext('2d'), {
+    type:'bar', data:{
+      labels: servers,
+      datasets:[
+        {label:'Energy kWh', data:totEnergy, backgroundColor:'rgba(79,156,249,0.6)', borderColor:'#4f9cf9', borderWidth:1, borderRadius:4},
+        {label:'CO₂',        data:totCO2,   backgroundColor:'rgba(231,76,60,0.6)',  borderColor:'#e74c3c', borderWidth:1, borderRadius:4},
+      ]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:12,font:{size:10}}},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:TICK}},
+    }
+  });
+
+  // Priority → server routing
+  const prios = ['green','balanced','performance'];
+  const dcSet = [...new Set(h.map(j=>j.chosen_dc))].sort();
+  const colors = ['rgba(0,210,106,0.7)','rgba(240,165,0,0.7)','rgba(231,76,60,0.7)'];
+  destroyChart('chartPriorityRoute');
+  charts.chartPriorityRoute = new Chart(document.getElementById('chartPriorityRoute').getContext('2d'), {
+    type:'bar', data:{
+      labels: dcSet,
+      datasets: prios.map((p,i) => ({
+        label: p, backgroundColor: colors[i], borderRadius:4, borderWidth:0,
+        data: dcSet.map(s => {
+          const total = h.filter(j=>j.priority===p).length;
+          const count = h.filter(j=>j.priority===p && j.chosen_dc===s).length;
+          return total ? Math.round(count/total*100) : 0;
+        }),
+      }))
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{boxWidth:10,font:{size:10}}},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{stacked:false,grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:{...TICK,callback:v=>v+'%'}}},
+    }
+  });
+
+  // Energy intensity histogram (simple bins)
+  const ef = h.map(j=>j.state.energy_factor);
+  const bins = 10; const mn=Math.min(...ef), mx=Math.max(...ef), step=(mx-mn)/bins||0.1;
+  const binCounts = Array(bins).fill(0);
+  ef.forEach(v => { const idx=Math.min(Math.floor((v-mn)/step),bins-1); binCounts[idx]++; });
+  const binLabels = Array.from({length:bins},(_,i)=>(mn+i*step).toFixed(2));
+  destroyChart('chartEnergyDist');
+  const cED = document.getElementById('chartEnergyDist').getContext('2d');
+  charts.chartEnergyDist = new Chart(cED, {
+    type:'bar', data:{labels:binLabels, datasets:[{
+      label:'Frequency', data:binCounts, borderRadius:4,
+      backgroundColor: makeGrad(cED,'rgba(79,156,249,0.7)','rgba(79,156,249,0.2)'),
+      borderColor:'#4f9cf9', borderWidth:1,
+    }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:TICK}},
+    }
+  });
+}
+
+// ── XAI ───────────────────────────────────────────────────────────
+function renderXAITab() {
+  const hasData = history.length > 0;
+  document.getElementById('xaiEmpty').style.display   = hasData?'none':'';
+  document.getElementById('xaiContent').style.display = hasData?'block':'none';
+  if (!hasData) return;
+
+  const sel = document.getElementById('xaiSelect');
+  const currentVal = sel.value;
+  sel.innerHTML = [...history].reverse().map(j =>
+    `<option value="${j.job_id}">Job #${j.job_id} → ${j.chosen_dc} (${j.priority})</option>`
+  ).join('');
+  if (currentVal && history.find(j=>j.job_id==currentVal)) sel.value = currentVal;
+  renderXAI();
+}
+
+function renderXAI() {
+  const id  = parseInt(document.getElementById('xaiSelect').value);
+  const job = history.find(j => j.job_id === id);
+  if (!job) return;
+
+  document.getElementById('xaiExplanation').textContent = job.explanation || 'No explanation available.';
+
+  const bd = job.score_breakdown || {};
+  const inPool  = Object.entries(bd).filter(([,v])=>v.in_pool);
+  const outPool = Object.entries(bd).filter(([,v])=>!v.in_pool);
+
+  // Score breakdown bars
+  const breakdownEl = document.getElementById('xaiScoreBreakdown');
+  breakdownEl.innerHTML = inPool.map(([dc, b]) => {
+    const isChosen = dc === job.chosen_dc;
+    const color = isChosen?'var(--green)':'var(--blue)';
+    return `<div class="server-score-row">
+      <div class="server-name" style="color:${color}">
+        ${isChosen?'<i class="fa fa-trophy chosen-star"></i>':'<i class="fa fa-circle-dot" style="opacity:0.4"></i>'}
+        ${dc} <span style="color:var(--muted);font-weight:400;font-size:0.75rem">${isChosen?'SELECTED':''}</span>
+      </div>
+      ${[['Perf','perf_score'],['Cost','cost_score'],['CO₂','co2_score'],['Latency','lat_score']].map(([lbl,k])=>`
+        <div style="display:flex;justify-content:space-between;margin-bottom:3px">
+          <span style="font-size:0.72rem;color:var(--muted)">${lbl}</span>
+          <span style="font-size:0.72rem;font-weight:700;color:${color}">${(b[k]||0).toFixed(3)}</span>
+        </div>
+        <div class="score-bar-wrap mb-8"><div class="score-bar" style="width:${((b[k]||0)*100).toFixed(1)}%;background:${color}"></div></div>
+      `).join('')}
+      <div style="text-align:right;font-size:0.75rem;margin-top:4px">Final: <strong style="color:${color}">${(b.final||0).toFixed(3)}</strong></div>
+    </div>`;
+  }).join('') + (outPool.length ? `<div style="margin-top:10px;font-size:0.72rem;color:var(--muted)">⛔ Excluded: ${outPool.map(([dc])=>dc).join(', ')}</div>` : '');
+
+  // Radar chart
+  const metrics = ['perf_score','cost_score','co2_score','lat_score'];
+  const labels  = ['Performance','Cost Eff.','CO₂ Score','Latency'];
+  destroyChart('chartRadar');
+  charts.chartRadar = new Chart(document.getElementById('chartRadar').getContext('2d'), {
+    type:'radar',
+    data:{
+      labels,
+      datasets: inPool.map(([dc, b], i) => ({
+        label: dc,
+        data: metrics.map(m => b[m]||0),
+        borderColor: dc===job.chosen_dc?'#00d26a':'rgba(79,156,249,0.5)',
+        backgroundColor: dc===job.chosen_dc?'rgba(0,210,106,0.12)':'rgba(79,156,249,0.04)',
+        borderWidth: dc===job.chosen_dc?2.5:1,
+        pointBackgroundColor: dc===job.chosen_dc?'#00d26a':'rgba(79,156,249,0.6)',
+        pointRadius: dc===job.chosen_dc?4:2,
+      }))
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{boxWidth:10,font:{size:9}}},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{r:{
+        grid:{color:'#1c2d40'},
+        angleLines:{color:'#1c2d40'},
+        ticks:{color:'#1c2d40',backdropColor:'transparent',font:{size:8}},
+        pointLabels:{color:'#6b7d8f',font:{size:9}},
+        min:0, max:1, stepSize:0.25,
+      }},
+    }
+  });
+
+  // Weight chart
+  const wmap = {
+    green:       [0.10, 0.25, 0.40, 0.25],
+    balanced:    [0.25, 0.25, 0.25, 0.25],
+    performance: [0.40, 0.10, 0.10, 0.40],
+  };
+  const w = wmap[job.priority] || [0.25,0.25,0.25,0.25];
+  destroyChart('chartWeights');
+  charts.chartWeights = new Chart(document.getElementById('chartWeights').getContext('2d'), {
+    type:'bar', data:{
+      labels:['Performance','Cost','CO₂','Latency'],
+      datasets:[{
+        data:w, borderRadius:6,
+        backgroundColor:['rgba(0,210,106,0.7)','rgba(79,156,249,0.7)','rgba(231,76,60,0.7)','rgba(240,165,0,0.7)'],
+        borderColor:['#00d26a','#4f9cf9','#e74c3c','#f0a500'], borderWidth:1,
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false, indexAxis:'y',
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:GRID,ticks:{...TICK,callback:v=>(v*100).toFixed(0)+'%'},min:0,max:0.5},y:{grid:{display:false},ticks:TICK}},
+    }
+  });
+}
+
+// ── SUSTAINABILITY ─────────────────────────────────────────────────
+function renderSustainability() {
+  const h = history;
+  const hasData = h.length > 0;
+  document.getElementById('sustainEmpty').style.display   = hasData?'none':'';
+  document.getElementById('sustainContent').style.display = hasData?'block':'none';
+  if (!hasData) return;
+
+  const ss = calcSustainability(h);
+  document.getElementById('gaugeScore').textContent = ss;
+  document.getElementById('gaugeScore').style.color = ss>=70?'var(--green)':ss>=40?'var(--yellow)':'var(--red)';
+  document.getElementById('sbSustain').textContent  = ss+'/100';
+
+  // Gauge doughnut
+  const pct = ss/100;
+  const gaugeColor = ss>=70?'#00d26a':ss>=40?'#f0a500':'#e74c3c';
+  destroyChart('chartGauge');
+  charts.chartGauge = new Chart(document.getElementById('chartGauge').getContext('2d'), {
+    type:'doughnut', data:{
+      datasets:[{
+        data:[pct, 1-pct],
+        backgroundColor:[gaugeColor,'rgba(28,45,64,0.5)'],
+        borderColor:['transparent','transparent'],
+        borderWidth:0, circumference:180, rotation:270,
+      }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'72%',
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      animation:{duration:1200},
+    }
+  });
+
+  const avoided = co2Avoided(h);
+  document.getElementById('sCO2Avoided').textContent = avoided.toFixed(5);
+  const green = h.filter(j=>j.priority==='green').length;
+  document.getElementById('sGreenPct').textContent   = Math.round(green/h.length*100)+'%';
+  document.getElementById('sGreenCount').textContent = `${green} of ${h.length} jobs`;
+
+  // Best server by efficiency
+  const servers = [...new Set(h.map(j=>j.chosen_dc))];
+  const eff = servers.map(s => ({s, avg: avg(h.filter(j=>j.chosen_dc===s).map(j=>j.power_kwh))}));
+  eff.sort((a,b)=>a.avg-b.avg);
+  if (eff.length) {
+    document.getElementById('sBestServer').textContent = eff[0].s;
+    document.getElementById('sBestKwh').textContent    = eff[0].avg.toFixed(4)+' kWh avg';
+  }
+
+  // Cumulative CO2
+  const cumCO2 = h.reduce((acc,j,i) => { acc.push((acc[i-1]||0)+j.co2); return acc; }, []);
+  destroyChart('chartCumCO2');
+  const cCC = document.getElementById('chartCumCO2').getContext('2d');
+  charts.chartCumCO2 = new Chart(cCC, {
+    type:'line', data:{
+      labels: h.map((_,i)=>i+1),
+      datasets:[{
+        label:'Cumulative CO₂', data:cumCO2, tension:0.4, fill:true, borderWidth:2,
+        borderColor:'#e74c3c', pointRadius:0,
+        backgroundColor: makeGrad(cCC,'rgba(231,76,60,0.2)','rgba(231,76,60,0)'),
+      }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:GRID,ticks:TICK},y:{grid:GRID,ticks:TICK}},
+    }
+  });
+
+  // CO2 by priority
+  const prioData = ['green','balanced','performance'].map(p => h.filter(j=>j.priority===p).reduce((s,j)=>s+j.co2,0));
+  destroyChart('chartCO2Priority');
+  charts.chartCO2Priority = new Chart(document.getElementById('chartCO2Priority').getContext('2d'), {
+    type:'bar', data:{
+      labels:['Green','Balanced','Performance'],
+      datasets:[{data:prioData, borderRadius:8,
+        backgroundColor:['rgba(0,210,106,0.7)','rgba(240,165,0,0.7)','rgba(231,76,60,0.7)'],
+        borderColor:['#00d26a','#f0a500','#e74c3c'], borderWidth:1,
+      }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS,callbacks:{label:ctx=>`${ctx.parsed.y.toFixed(6)} tCO2`}}},
+      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:TICK}},
+    }
+  });
+
+  // Energy efficiency per server
+  const srvs  = eff.map(e=>e.s);
+  const avgKwh = eff.map(e=>e.avg);
+  const minKwh = Math.min(...avgKwh);
+  destroyChart('chartServerEff');
+  const cSE = document.getElementById('chartServerEff').getContext('2d');
+  charts.chartServerEff = new Chart(cSE, {
+    type:'bar', data:{
+      labels: srvs,
+      datasets:[{
+        label:'Avg kWh/job', data:avgKwh, borderRadius:6,
+        backgroundColor: avgKwh.map(v => v===minKwh?'rgba(0,210,106,0.8)':'rgba(79,156,249,0.4)'),
+        borderColor: avgKwh.map(v => v===minKwh?'#00d26a':'#4f9cf9'),
+        borderWidth:1,
+      }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
+      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:TICK}},
+    }
+  });
+
+  // Rating banner
+  const banner = document.getElementById('ratingBanner');
+  const rating = ss>=70?'Excellent 🌟':ss>=40?'Good ✅':'Needs Improvement ⚠️';
+  const bColor = ss>=70?'#00d26a':ss>=40?'#f0a500':'#e74c3c';
+  const advice = ss>=70
+    ? 'Outstanding sustainability. Your workloads are well-optimised — keep scheduling green-priority jobs during high-carbon windows and the RL agents will reinforce these patterns over time.'
+    : ss>=40
+    ? 'Good sustainability posture. Shift more jobs to green priority and schedule during low-carbon periods (check the sidebar recommendation) to push past 70.'
+    : 'Sustainability needs attention. High proportion of performance jobs or high-carbon scheduling windows is raising your footprint. Use the carbon indicator in the navbar to time your schedules better.';
+  banner.style.cssText = `background:rgba(28,45,64,0.4);border:1px solid ${bColor}33;border-left:4px solid ${bColor}`;
+  banner.innerHTML = `<div class="rating-title" style="color:${bColor}">${rating}</div><div class="rating-text" style="color:var(--muted)">${advice}</div>`;
+}
+
+// ── CHART UTILS ────────────────────────────────────────────────────
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+function destroyCharts(ids) { ids.forEach(destroyChart); }
+
+// ── INIT ───────────────────────────────────────────────────────────
+async function init() {
+  await Promise.all([loadTierPools(), loadCarbonStatus()]);
+  updateQueueBadge();
+  updateSidebar();
+  updateNavExport();
+  renderOverview();
+  renderJobsTables();
+
+  // Refresh carbon status every 60 seconds
+  setInterval(loadCarbonStatus, 60000);
+}
+
+init();
+</script>
+</body>
+</html>

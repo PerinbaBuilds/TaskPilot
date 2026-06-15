@@ -4,6 +4,9 @@ from groq import Groq
 import os
 import random
 import sys
+import numpy as np
+from rl.agents import Agent
+from core.config import get_weights as _cfg_weights
 
 app = FastAPI()
 
@@ -24,10 +27,10 @@ def _load(rel_path: str, loader):
 # ─────────────────────────────────────────────────────────────────
 # LOAD DATASETS
 # ─────────────────────────────────────────────────────────────────
-TASKS   = _load("dataset_rl/task_15min_L.csv", pd.read_csv)
-PRICE   = _load("dataset_rl/price.csv",        pd.read_csv)
-SERVERS = _load("dataset_rl/Server_L.xlsx",    pd.read_excel)
-STEEL   = _load("steel_industry_data.csv",     pd.read_csv)
+TASKS   = _load("data/dataset_rl/task_15min_L.csv", pd.read_csv)
+PRICE   = _load("data/dataset_rl/price.csv",        pd.read_csv)
+SERVERS = _load("data/dataset_rl/Server_L.xlsx",    pd.read_excel)
+STEEL   = _load("data/steel_industry_data.csv",     pd.read_csv)
 
 DATA_PTR  = 0
 STEEL_PTR = 0
@@ -90,6 +93,34 @@ PRIORITY_WEIGHTS = {
 # ─────────────────────────────────────────────────────────────────
 GROQ_KEY    = os.getenv("GROQ_API_KEY", "")
 groq_client = Groq(api_key=GROQ_KEY)
+
+
+# ─────────────────────────────────────────────────────────────────
+# RL AGENT INTEGRATION
+# ─────────────────────────────────────────────────────────────────
+def _sigmoid(x):
+    return float(1.0 / (1.0 + np.exp(-np.clip(x, -10, 10))))
+
+_rl_agents: dict = {}
+
+def _init_rl_agents():
+    try:
+        from rl.rl_env import CloudEnv
+        env = CloudEnv(os.path.join(BASE, "data", "steel_industry_data.csv"))
+        for priority in ["green", "balanced", "performance"]:
+            agent = Agent(priority, lr=0.05)
+            wts = _cfg_weights(priority)
+            for _ in range(300):
+                state = env.reset()
+                # reward = green_benefit - cost_penalty - load_penalty
+                reward = float(wts[0]*state[0] - wts[2]*state[3] - wts[1]*state[1])
+                agent.learn(state, reward)
+            _rl_agents[priority] = agent
+        print(f"RL agents trained for {list(_rl_agents.keys())}")
+    except Exception as e:
+        print(f"RL agent training skipped: {e}")
+
+_init_rl_agents()
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -237,6 +268,32 @@ def compute_scores(state: dict, priority: str) -> tuple[dict, dict, dict]:
             "in_pool":     in_pool,
         }
 
+    # ─────────────────────────────────────────────────────────────
+    # RL AGENT BLENDING — apply after main scoring loop
+    # Blend: 75% static, 25% RL-informed
+    # ─────────────────────────────────────────────────────────────
+    if _rl_agents and priority in _rl_agents:
+        state_vec = np.array([
+            1.0 - state['carbon_factor'],
+            state['load'],
+            0.5,
+            state['energy_price'],
+        ], dtype=np.float32)
+        rl_raw = _rl_agents[priority].act(state_vec)
+        rl_score = _sigmoid(rl_raw)
+        for i, dc in enumerate(server_ids):
+            in_pool = score_breakdown[dc]['in_pool']
+            if in_pool:
+                score = round(min(max(0.75 * scores[dc] + 0.25 * rl_score, 0.0), 1.0), 4)
+                scores[dc] = score
+                score_breakdown[dc]['final'] = score
+                score_breakdown[dc]['rl_score'] = round(rl_score, 4)
+            else:
+                score_breakdown[dc]['rl_score'] = 0.0
+    else:
+        for dc in server_ids:
+            score_breakdown[dc]['rl_score'] = 0.0
+
     return scores, metrics, score_breakdown
 
 
@@ -374,6 +431,29 @@ def show_tiers():
             "in_performance_pool":  dc in perf_pool,
         }
     return {"server_tiers": result, "total_servers": n_servers}
+
+
+# ─────────────────────────────────────────────────────────────────
+# SUSTAINABILITY HINT
+# ─────────────────────────────────────────────────────────────────
+@app.get("/sustainability")
+def get_sustainability_hint():
+    """Returns current carbon factor and scheduling recommendation."""
+    try:
+        steel = STEEL.iloc[STEEL_PTR % len(STEEL)]
+        cf = float(steel["norm_co2"])
+        if cf < 0.33:
+            rec = "performance"
+            msg = "Low carbon intensity — ideal for any workload"
+        elif cf < 0.66:
+            rec = "balanced"
+            msg = "Moderate carbon intensity — prefer balanced jobs"
+        else:
+            rec = "green"
+            msg = "High carbon intensity — prioritize green jobs"
+        return {"carbon_factor": round(cf, 4), "recommendation": rec, "message": msg}
+    except Exception:
+        return {"carbon_factor": 0.5, "recommendation": "balanced", "message": "Unable to read carbon data"}
 
 
 # ─────────────────────────────────────────────────────────────────
