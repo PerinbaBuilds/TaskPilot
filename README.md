@@ -1,150 +1,120 @@
-# GreenMind — Sustainable Cloud Job Scheduler
+# 🌱 GreenMind — Sustainable Cloud Job Scheduler
 
-> Intelligent, RL-powered cloud job scheduler that routes workloads to the most energy-efficient servers based on real-time carbon intensity data.
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Reinforcement%20Learning-FF6B35?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Groq%20LLM-XAI-8B5CF6?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/Live-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white"/>
+  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge"/>
+</p>
 
-🌐 **Live Demo:** [taskpilot-krt8.onrender.com](https://taskpilot-krt8.onrender.com)
+<p align="center">
+  <b>Route cloud workloads intelligently — minimising carbon emissions using real-time energy data, RL agents, and LLM-powered explainability.</b>
+</p>
 
----
-
-## What It Does
-
-GreenMind schedules compute jobs across a pool of servers using **reinforcement learning** and **real-time carbon intensity signals**. Instead of routing purely by performance, it balances:
-
-- ⚡ Energy efficiency (kWh consumed)
-- 🌿 Carbon footprint (CO₂ emissions)
-- 💰 Cost per job
-- 🚀 Throughput / latency requirements
-
-Each job is assigned a **priority tier** (green / balanced / performance), and only servers in that tier compete for the job — enforcing sustainable routing by design.
-
----
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────┐
-│              Browser (Dashboard)             │
-│         HTML + CSS + JS + Chart.js           │
-└──────────────────┬──────────────────────────┘
-                   │ HTTP (same-origin)
-┌──────────────────▼──────────────────────────┐
-│            FastAPI Backend (api.py)          │
-│                                              │
-│  ┌─────────────┐  ┌────────────────────┐    │
-│  │  RL Agents  │  │  Groq LLM (XAI)    │    │
-│  │  (3 agents) │  │  llama-3.3-70b     │    │
-│  └──────┬──────┘  └────────────────────┘    │
-│         │                                    │
-│  ┌──────▼──────────────────────────────┐    │
-│  │  Tier-Pool Scoring Engine           │    │
-│  │  green → bottom third servers       │    │
-│  │  balanced → middle third            │    │
-│  │  performance → top third            │    │
-│  └─────────────────────────────────────┘    │
-│                                              │
-│  ┌─────────────────────────────────────┐    │
-│  │  Datasets                           │    │
-│  │  • Steel Industry Energy (UCI)      │    │
-│  │  • Synthetic server pool (9 nodes)  │    │
-│  │  • Workload traces (task_15min)     │    │
-│  └─────────────────────────────────────┘    │
-└─────────────────────────────────────────────┘
-```
+<p align="center">
+  🌐 <a href="https://taskpilot-krt8.onrender.com"><strong>Live Demo → taskpilot-krt8.onrender.com</strong></a>
+</p>
 
 ---
 
-## Tech Stack
+## 🚀 What Is GreenMind?
 
-| Layer | Technology |
-|-------|-----------|
-| **Backend API** | [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn |
-| **Frontend** | Vanilla HTML/CSS/JS + [Chart.js 4.4](https://www.chartjs.org/) |
-| **Reinforcement Learning** | NumPy — linear function approximation, TD-error updates |
-| **LLM Explanations (XAI)** | [Groq API](https://groq.com/) — `llama-3.3-70b-versatile` |
-| **Data** | Pandas, OpenPyXL — Steel Industry Energy Dataset (UCI) |
-| **Deployment** | Railway / Render |
-| **Language** | Python 3.10+ |
+Most cloud schedulers optimise for speed and cost alone. GreenMind adds a third dimension: **sustainability**.
+
+It routes each compute job to the server that best balances:
+
+| Metric | Weight (green) | Weight (balanced) | Weight (performance) |
+|--------|:--------------:|:-----------------:|:--------------------:|
+| ⚡ Energy efficiency | 40% | 25% | 10% |
+| 💰 Cost | 25% | 25% | 10% |
+| 🚀 Throughput | 10% | 25% | 40% |
+| ⏱ Latency | 25% | 25% | 40% |
+
+On top of static scoring, **3 RL agents** (one per priority tier) continuously learn from system state and carbon intensity data — blending their policy 25% into every scheduling decision.
 
 ---
 
-## RL Agent Design
-
-Three agents are trained at startup (300 episodes each), one per priority tier:
+## 🏗 Architecture
 
 ```
-State vector:  [green_score, system_load, job_size, energy_cost]
-Reward:        w_green × green − w_cost × cost − w_perf × load
-Update rule:   weights += lr × (reward − prediction) × state   (TD-error)
-```
-
-At scheduling time, scores are blended:
-```
-final_score = 0.75 × static_score + 0.25 × RL_score
+┌──────────────────────────────────────────────────┐
+│                 Browser Dashboard                 │
+│         HTML · CSS · JS · Chart.js 4.4           │
+│    (session-isolated — each user owns their data) │
+└────────────────────┬─────────────────────────────┘
+                     │ HTTP / same-origin
+┌────────────────────▼─────────────────────────────┐
+│              FastAPI  (api.py)                    │
+│                                                   │
+│  ┌──────────────────┐   ┌──────────────────────┐ │
+│  │  3 × RL Agents   │   │  Groq LLM (XAI)      │ │
+│  │  TD-error update │   │  llama-3.3-70b       │ │
+│  └────────┬─────────┘   └──────────────────────┘ │
+│           │                                       │
+│  ┌────────▼──────────────────────────────────┐   │
+│  │       Tier-Pool Scoring Engine            │   │
+│  │  green → bottom third (efficient servers) │   │
+│  │  balanced → middle third                  │   │
+│  │  performance → top third (powerful)       │   │
+│  └────────────────────────────────────────────┘  │
+│                                                   │
+│  ┌────────────────────────────────────────────┐  │
+│  │  Datasets                                  │  │
+│  │  • Steel Industry Energy Dataset  (UCI)    │  │
+│  │  • 9-server synthetic cluster              │  │
+│  │  • 15-min workload traces                  │  │
+│  └────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Sustainability Score Formula
+## ✨ Features
 
-```
-score = (avg_reward × 0.30
-       + green_job_ratio × 0.25
-       + (1 − avg_carbon) × 0.25
-       + co2_efficiency × 0.20) × 100
-```
+- **RL-powered routing** — agents trained at startup on real energy data, blended into every decision
+- **Tier-pool isolation** — green jobs only compete on efficient servers; performance jobs on powerful ones
+- **Explainable AI** — Groq LLM explains every scheduling decision in plain English
+- **Live carbon signal** — real-time carbon intensity from Steel Industry Dataset drives recommendations
+- **Sustainability score** — composite metric tracking green ratio, CO₂ efficiency, and reward
+- **Session isolation** — each browser session has its own independent queue and history
+- **Bulk CSV upload** — submit 100s of jobs at once from a CSV file
 
 ---
 
-## Project Structure
+## 🗂 Project Structure
 
 ```
 TaskPilot/
-├── api.py                  # FastAPI entry point — scoring, RL, XAI
-├── rl/                     # Reinforcement learning package
-│   ├── agents.py           # Linear function approximation agent
-│   ├── rl_env.py           # CloudEnv — state/reward simulation
-│   └── train_agents.py     # Standalone training script
-├── core/                   # Shared utilities
-│   ├── config.py           # Priority weight configs
-│   ├── data_loader.py      # Dataset loading + normalisation
-│   ├── energy_model.py     # Power consumption model
-│   └── job_queue.py        # In-memory job queue
-├── frontend/               # Web layer
-│   ├── flask_app.py        # (legacy) Flask server
+├── api.py                    ← FastAPI entry point (scoring, RL, XAI, serving HTML)
+├── rl/                       ← Reinforcement learning
+│   ├── agents.py             ← Linear function approximation agent
+│   ├── rl_env.py             ← CloudEnv: state/reward simulation
+│   └── train_agents.py       ← Standalone training script
+├── core/                     ← Shared utilities
+│   ├── config.py             ← Priority weight definitions
+│   ├── data_loader.py        ← Dataset loading & normalisation
+│   ├── energy_model.py       ← Server power model (P_idle → P_peak)
+│   ├── job_queue.py          ← In-memory job queue
+│   └── llm_manager.py        ← Fallback explanation generator
+├── frontend/
 │   └── templates/
-│       └── dashboard.html  # Single-page dashboard
-├── data/                   # Datasets
-│   ├── steel_industry_data.csv
-│   ├── dataset_rl/         # Server specs + workload traces
-│   └── demo_jobs.csv       # Sample jobs for testing
-├── Procfile                # Railway deployment
-├── render.yaml             # Render deployment
+│       └── dashboard.html    ← Single-page dashboard (Chart.js, dark theme)
+├── data/
+│   ├── steel_industry_data.csv   ← UCI energy dataset
+│   ├── dataset_rl/               ← Server specs + workload traces
+│   └── demo_jobs.csv             ← Sample jobs for testing ↓
+├── Procfile                  ← Railway deployment
+├── render.yaml               ← Render deployment
 └── requirements.txt
 ```
 
 ---
 
-## Running Locally
+## 🧪 Try It — Demo Jobs
 
-```bash
-git clone https://github.com/PerinbaBuilds/TaskPilot.git
-cd TaskPilot
-pip install -r requirements.txt
-
-# Set your Groq API key (optional — fallback explanation used if missing)
-set GROQ_API_KEY=your_key_here   # Windows
-export GROQ_API_KEY=your_key_here  # Mac/Linux
-
-uvicorn api:app --host 0.0.0.0 --port 8000
-```
-
-Open **http://localhost:8000**
-
----
-
-## Demo
-
-Upload `data/demo_jobs.csv` from the dashboard to see a pre-built set of 10 jobs across all three priority tiers, then hit **Run Scheduler** to see RL-powered routing in action.
+Upload **`data/demo_jobs.csv`** from the dashboard to test with a pre-built mix of 10 jobs:
 
 ```csv
 cpu,memory,priority,latency
@@ -154,31 +124,86 @@ cpu,memory,priority,latency
 23,23,green,medium
 72,75,balanced,high
 11,59,balanced,low
-...
+79,62,balanced,low
+77,98,green,medium
+75,71,performance,medium
+95,64,green,medium
+```
+
+Hit **▶ Run Scheduler** to see RL-powered routing, server selection, sustainability score and XAI explanations live.
+
+---
+
+## 🤖 RL Agent Design
+
+```python
+# State vector fed to each agent
+state = [green_score, system_load, job_size, energy_cost]
+
+# Reward function
+reward = w_green × green − w_cost × cost − w_perf × load
+
+# TD-error weight update (linear function approximation)
+weights += lr × (reward − dot(weights, state)) × state
+
+# Final score blending
+final_score = 0.75 × static_score + 0.25 × RL_score
+```
+
+Three agents train for **300 episodes each at startup** — one per priority tier (green / balanced / performance).
+
+---
+
+## 📊 Sustainability Score
+
+```
+score = (avg_reward    × 0.30
+       + green_ratio   × 0.25
+       + carbon_score  × 0.25   ← (1 − avg_carbon_factor)
+       + co2_efficiency× 0.20) × 100
 ```
 
 ---
 
-## Dashboard Features
+## ⚙️ Tech Stack
 
-| Tab | Features |
-|-----|---------|
-| **Overview** | KPI cards, reward timeline, server distribution doughnut, carbon intensity chart |
-| **Jobs** | Pending queue, completed history, CSV bulk upload |
-| **Analytics** | Per-server reward, energy vs CO₂, priority breakdown |
-| **Explainable AI** | LLM explanation per job, radar chart, score breakdown |
-| **Sustainability** | Animated gauge, CO₂ avoided estimate, carbon recommendation |
-
----
-
-## Contributors
-
-| Name | Role |
-|------|------|
-| [PerinbaBuilds](https://github.com/PerinbaBuilds) | Creator & Lead Developer |
+| Component | Technology |
+|-----------|-----------|
+| API | FastAPI + Uvicorn |
+| ML / RL | NumPy (no heavy ML framework) |
+| LLM | Groq API — `llama-3.3-70b-versatile` |
+| Data | Pandas, OpenPyXL |
+| Frontend | Vanilla JS + Chart.js 4.4 |
+| Hosting | Render (free) / Railway |
 
 ---
 
-## License
+## 🏃 Run Locally
 
-MIT
+```bash
+git clone https://github.com/PerinbaBuilds/TaskPilot.git
+cd TaskPilot
+pip install -r requirements.txt
+
+# Windows
+set GROQ_API_KEY=your_key_here
+# Mac / Linux
+export GROQ_API_KEY=your_key_here
+
+uvicorn api:app --host 0.0.0.0 --port 8000
+# Open http://localhost:8000
+```
+
+---
+
+## 👤 Contributors
+
+| | Name | Role |
+|-|------|------|
+| <img src="https://github.com/PerinbaBuilds.png" width="30" style="border-radius:50%"> | [PerinbaBuilds](https://github.com/PerinbaBuilds) | Creator & Lead Developer |
+
+---
+
+## 📄 License
+
+This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
