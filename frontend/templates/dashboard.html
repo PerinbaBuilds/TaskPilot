@@ -106,6 +106,8 @@ body {
 }
 .btn-export:hover { border-color: var(--blue); color: var(--blue); }
 .btn-export:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-reset { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 8px; padding: 7px 14px; font-size: 0.82rem; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+.btn-reset:hover { border-color: #ff4d4d; color: #ff4d4d; }
 
 /* ── SIDEBAR ── */
 .sidebar {
@@ -379,6 +381,9 @@ body {
   </button>
   <button class="btn-export" id="btnExport" onclick="exportCSV()" disabled title="Export results">
     <i class="fa fa-download"></i>
+  </button>
+  <button class="btn-reset" onclick="confirmReset()" title="Reset all data">
+    <i class="fa fa-rotate-left"></i> Reset
   </button>
 </nav>
 
@@ -1002,6 +1007,11 @@ function clearHistory() {
   renderOverview(); renderJobsTables(); renderAnalytics();
   renderSustainability(); renderXAITab();
   toast('History cleared', 'info');
+}
+function confirmReset() {
+  if (!confirm('Reset all jobs, queue and history? This cannot be undone.')) return;
+  clearHistory();
+  toast('All data reset', 'info');
 }
 
 // ── CSV UPLOAD ─────────────────────────────────────────────────────
