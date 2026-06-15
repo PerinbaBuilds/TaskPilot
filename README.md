@@ -1,12 +1,11 @@
 # 🌱 GreenMind — Sustainable Cloud Job Scheduler
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/>
-  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Reinforcement%20Learning-FF6B35?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Groq%20LLM-XAI-8B5CF6?style=for-the-badge"/>
-  <img src="https://img.shields.io/badge/Live-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white"/>
-  <img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge"/>
+  <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/></a>
+  <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"/></a>
+  <a href="https://en.wikipedia.org/wiki/Reinforcement_learning"><img src="https://img.shields.io/badge/Reinforcement%20Learning-FF6B35?style=for-the-badge"/></a>
+  <a href="https://groq.com/"><img src="https://img.shields.io/badge/Groq%20LLM-XAI-8B5CF6?style=for-the-badge"/></a>
+  <a href="https://taskpilot-krt8.onrender.com"><img src="https://img.shields.io/badge/Live-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white"/></a>
 </p>
 
 <p align="center">
