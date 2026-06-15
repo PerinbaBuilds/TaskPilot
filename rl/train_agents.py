@@ -5,11 +5,11 @@ Each agent represents a data centre and learns to score incoming jobs
 using linear function approximation (numpy) and TD-error weight updates.
 """
 import os
-from agents import Agent
-from rl_env import CloudEnv
-from config import get_weights
+from rl.agents import Agent
+from rl.rl_env import CloudEnv
+from core.config import get_weights
 
-STEEL = os.path.join(os.path.dirname(__file__), "steel_industry_data.csv")
+STEEL = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "steel_industry_data.csv")
 BORG  = None  # set to borg_traces_data.csv path if available
 
 EPISODES = 500
