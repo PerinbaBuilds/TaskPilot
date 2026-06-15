@@ -1,5 +1,6 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.templating import Jinja2Templates
 import pandas as pd
 from groq import Groq
 import os
@@ -467,6 +468,12 @@ def get_sustainability_hint():
 # ─────────────────────────────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────────────────────────────
+_templates = Jinja2Templates(directory=os.path.join(BASE, "frontend", "templates"))
+
 @app.get("/")
-def root():
+def root(request: Request):
+    return _templates.TemplateResponse("dashboard.html", {"request": request})
+
+@app.get("/health")
+def health():
     return {"message": "GreenMind API — tier-pool routing active"}
