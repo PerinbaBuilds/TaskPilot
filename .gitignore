@@ -1,0 +1,16 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.env
+.venv/
+venv/
+# dataset files — only steel_industry_data.csv is committed
+dataset_rl/
+*.xlsx
+*.XLSX
+jobs*.csv
+!sample_jobs*.csv
+.streamlit/secrets.toml
+.claude/
