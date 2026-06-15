@@ -1,0 +1,11 @@
+cpu,memory,priority,latency
+52,16,performance,high
+14,71,balanced,high
+30,46,green,high
+23,23,green,medium
+72,75,balanced,high
+11,59,balanced,low
+79,62,balanced,low
+77,98,green,medium
+75,71,performance,medium
+95,64,green,medium
