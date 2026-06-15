@@ -3,16 +3,31 @@ import pandas as pd
 from groq import Groq
 import os
 import random
+import sys
 
 app = FastAPI()
 
 # ─────────────────────────────────────────────────────────────────
+# PATHS — resolved relative to this script so the server can be
+# started from any working directory
+# ─────────────────────────────────────────────────────────────────
+BASE = os.path.dirname(os.path.abspath(__file__))
+
+def _load(rel_path: str, loader):
+    full = os.path.join(BASE, rel_path)
+    if not os.path.exists(full):
+        print(f"\n❌  Missing dataset: {full}")
+        print(f"    Place the file at that path and restart the server.\n")
+        sys.exit(1)
+    return loader(full)
+
+# ─────────────────────────────────────────────────────────────────
 # LOAD DATASETS
 # ─────────────────────────────────────────────────────────────────
-TASKS   = pd.read_csv("dataset_rl/task_15min_L.csv")
-PRICE   = pd.read_csv("dataset_rl/price.csv")
-SERVERS = pd.read_excel("dataset_rl/Server_L.XLSX")
-STEEL   = pd.read_csv("steel_industry_data.csv")
+TASKS   = _load("dataset_rl/task_15min_L.csv", pd.read_csv)
+PRICE   = _load("dataset_rl/price.csv",        pd.read_csv)
+SERVERS = _load("dataset_rl/Server_L.XLSX",    pd.read_excel)
+STEEL   = _load("steel_industry_data.csv",     pd.read_csv)
 
 DATA_PTR  = 0
 STEEL_PTR = 0
