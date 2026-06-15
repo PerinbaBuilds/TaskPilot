@@ -6,6 +6,7 @@ from groq import Groq
 import os
 import random
 import sys
+import uuid
 import numpy as np
 from rl.agents import Agent
 from core.config import get_weights as _cfg_weights
@@ -43,9 +44,16 @@ STEEL   = _load("data/steel_industry_data.csv",     pd.read_csv)
 
 DATA_PTR  = 0
 STEEL_PTR = 0
-job_queue      = []
-job_id_counter = 0
-submitted_ids  = set()
+
+# ─────────────────────────────────────────────────────────────────
+# SESSION STORE — each visitor gets isolated queue/history
+# ─────────────────────────────────────────────────────────────────
+_sessions: dict = {}
+
+def _get_session(sid: str) -> dict:
+    if sid not in _sessions:
+        _sessions[sid] = {"job_queue": [], "job_id_counter": 0, "submitted_ids": set()}
+    return _sessions[sid]
 
 # ─────────────────────────────────────────────────────────────────
 # NORMALISE STEEL COLUMNS ONCE AT STARTUP
@@ -133,18 +141,27 @@ _init_rl_agents()
 
 
 # ─────────────────────────────────────────────────────────────────
+# SESSION INIT
+# ─────────────────────────────────────────────────────────────────
+@app.get("/session")
+def new_session():
+    sid = str(uuid.uuid4())
+    _get_session(sid)
+    return {"session_id": sid}
+
+
+# ─────────────────────────────────────────────────────────────────
 # JOB SUBMISSION
 # ─────────────────────────────────────────────────────────────────
 @app.post("/submit")
-def submit_job(job: dict):
-    global job_id_counter, submitted_ids
-    job_id_counter += 1
-    new_id = job_id_counter
-    if new_id in submitted_ids:
-        return {"job_id": new_id, "status": "already_submitted"}
+def submit_job(job: dict, request: Request):
+    sid = request.headers.get("X-Session-ID", "default")
+    s = _get_session(sid)
+    s["job_id_counter"] += 1
+    new_id = s["job_id_counter"]
     job["job_id"] = new_id
-    submitted_ids.add(new_id)
-    job_queue.append(job)
+    s["submitted_ids"].add(new_id)
+    s["job_queue"].append(job)
     return {"job_id": new_id}
 
 
@@ -152,13 +169,15 @@ def submit_job(job: dict):
 # RESET
 # ─────────────────────────────────────────────────────────────────
 @app.post("/reset")
-def reset_state():
-    global job_queue, job_id_counter, submitted_ids, DATA_PTR, STEEL_PTR
-    job_queue      = []
-    submitted_ids  = set()
-    job_id_counter = 0
-    DATA_PTR       = 0
-    STEEL_PTR      = 0
+def reset_state(request: Request):
+    global DATA_PTR, STEEL_PTR
+    sid = request.headers.get("X-Session-ID", "default")
+    s = _get_session(sid)
+    s["job_queue"]      = []
+    s["submitted_ids"]  = set()
+    s["job_id_counter"] = 0
+    DATA_PTR = 0
+    STEEL_PTR = 0
     return {"status": "reset ok"}
 
 
@@ -377,10 +396,12 @@ the dominant metric, and current system conditions. Do not greet or start with I
 # SCHEDULER ENDPOINT
 # ─────────────────────────────────────────────────────────────────
 @app.post("/run")
-def run_scheduler():
+def run_scheduler(request: Request):
+    sid = request.headers.get("X-Session-ID", "default")
+    s = _get_session(sid)
     scheduled_jobs = []
-    while job_queue:
-        job   = job_queue.pop(0)
+    while s["job_queue"]:
+        job   = s["job_queue"].pop(0)
         state = compute_state()
         scores, metrics, breakdown = compute_scores(state, job["priority"])
 
