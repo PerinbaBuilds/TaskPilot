@@ -26,7 +26,7 @@ def _load(rel_path: str, loader):
 # ─────────────────────────────────────────────────────────────────
 TASKS   = _load("dataset_rl/task_15min_L.csv", pd.read_csv)
 PRICE   = _load("dataset_rl/price.csv",        pd.read_csv)
-SERVERS = _load("dataset_rl/Server_L.XLSX",    pd.read_excel)
+SERVERS = _load("dataset_rl/Server_L.xlsx",    pd.read_excel)
 STEEL   = _load("steel_industry_data.csv",     pd.read_csv)
 
 DATA_PTR  = 0
