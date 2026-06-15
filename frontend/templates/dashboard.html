@@ -806,6 +806,11 @@ body {
       <div class="upload-text">Click to upload jobs.csv<br><small>Columns: priority, latency (optional: cpu, mem)</small></div>
       <input type="file" id="csvInput" accept=".csv" onchange="uploadCSV(this)">
     </div>
+    <div style="margin-top:8px;padding:8px 10px;background:rgba(0,210,106,0.06);border:1px solid rgba(0,210,106,0.15);border-radius:6px;font-size:0.72rem;color:var(--muted);line-height:1.6">
+      <b style="color:var(--green)">Required:</b> <code style="color:#aaa">priority</code> — one of <code style="color:#aaa">green</code>, <code style="color:#aaa">balanced</code>, <code style="color:#aaa">performance</code><br>
+      <b style="color:var(--green)">Optional:</b> <code style="color:#aaa">latency</code> (low / medium / high) &nbsp;|&nbsp; <code style="color:#aaa">cpu</code> (0–100) &nbsp;|&nbsp; <code style="color:#aaa">mem</code> (0–100)<br>
+      <b style="color:var(--green)">Example row:</b> <code style="color:#aaa">green, low, 70, 50</code>
+    </div>
   </div>
 </div>
 
