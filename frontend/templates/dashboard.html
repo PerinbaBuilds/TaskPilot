@@ -819,8 +819,21 @@ body {
 
 <script>
 const API = '';
-let history = JSON.parse(localStorage.getItem('gm_history') || '[]');
-let queue   = JSON.parse(localStorage.getItem('gm_queue')   || '[]');
+
+// ── SESSION ISOLATION ────────────────────────────────────────────
+function getSessionId() {
+  let sid = localStorage.getItem('gm_session_id');
+  if (!sid) { sid = crypto.randomUUID(); localStorage.setItem('gm_session_id', sid); }
+  return sid;
+}
+const SID = getSessionId();
+function apiHeaders(extra) {
+  return Object.assign({'Content-Type':'application/json','X-Session-ID': SID}, extra||{});
+}
+// ─────────────────────────────────────────────────────────────────
+
+let history = JSON.parse(localStorage.getItem('gm_history_' + SID) || '[]');
+let queue   = JSON.parse(localStorage.getItem('gm_queue_'   + SID) || '[]');
 let tierPools = {};
 let charts = {};
 
@@ -849,8 +862,8 @@ function makeGrad(ctx, c1, c2) {
 
 // ── STATE HELPERS ─────────────────────────────────────────────────
 function save() {
-  localStorage.setItem('gm_history', JSON.stringify(history));
-  localStorage.setItem('gm_queue',   JSON.stringify(queue));
+  localStorage.setItem('gm_history_' + SID, JSON.stringify(history));
+  localStorage.setItem('gm_queue_'   + SID, JSON.stringify(queue));
 }
 
 function avg(arr) { return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
@@ -939,7 +952,7 @@ async function submitJob() {
     latency:  document.getElementById('fLatency').value,
   };
   try {
-    const r = await fetch(`${API}/submit`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const r = await fetch(`${API}/submit`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payload)});
     const d = await r.json();
     if (d.status === 'already_submitted') { toast('Job already in queue', 'info'); return; }
     queue.push({
@@ -967,7 +980,7 @@ async function runScheduler() {
   icon.innerHTML = '<span class="spinner"></span>';
   text.textContent = 'Running…';
   try {
-    const r = await fetch(`${API}/run`, {method:'POST'});
+    const r = await fetch(`${API}/run`, {method:'POST', headers:apiHeaders()});
     const d = await r.json();
     const jobs = d.scheduled_jobs || [];
     if (jobs.length) {
@@ -999,7 +1012,7 @@ function updateQueueBadge() {
   if (n > 0) btn.classList.add('pulsing'); else btn.classList.remove('pulsing');
 }
 async function clearQueue() {
-  try { await fetch(`${API}/reset`, {method:'POST'}); } catch {}
+  try { await fetch(`${API}/reset`, {method:'POST', headers:apiHeaders()}); } catch {}
   queue = [];
   save();
   updateQueueBadge();
@@ -1009,7 +1022,7 @@ async function clearQueue() {
 function clearHistory() {
   history = []; queue = [];
   save();
-  try { fetch(`${API}/reset`, {method:'POST'}); } catch {}
+  try { fetch(`${API}/reset`, {method:'POST', headers:apiHeaders()}); } catch {}
   updateQueueBadge(); updateSidebar(); updateNavExport();
   renderOverview(); renderJobsTables(); renderAnalytics();
   renderSustainability(); renderXAITab();
@@ -1039,7 +1052,7 @@ async function uploadCSV(input) {
       latency:  lIdx>=0?(cols[lIdx]||'medium').trim():'medium',
     };
     try {
-      const r = await fetch(`${API}/submit`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+      const r = await fetch(`${API}/submit`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payload)});
       const d = await r.json();
       if (!d.status) { queue.push({job_id:d.job_id, ...payload, cpu:50, mem:50}); added++; }
     } catch {}
