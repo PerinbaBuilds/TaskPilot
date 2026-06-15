@@ -193,17 +193,3 @@ export GROQ_API_KEY=your_key_here
 uvicorn api:app --host 0.0.0.0 --port 8000
 # Open http://localhost:8000
 ```
-
----
-
-## 👤 Contributors
-
-| | Name | Role |
-|-|------|------|
-| <img src="https://github.com/PerinbaBuilds.png" width="30" style="border-radius:50%"> | [PerinbaBuilds](https://github.com/PerinbaBuilds) | Creator & Lead Developer |
-
----
-
-## 📄 License
-
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
