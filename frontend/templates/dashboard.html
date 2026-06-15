@@ -55,7 +55,6 @@ body {
   border-right: 1px solid var(--border);
   background: rgba(13,20,33,0.96);
 }
-.brand-icon { font-size: 1.3rem; }
 .carbon-pill {
   display: flex; align-items: center; gap: 7px;
   background: var(--surface); border: 1px solid var(--border);
@@ -361,7 +360,10 @@ body {
 
 <!-- ════════════════ NAVBAR ════════════════ -->
 <nav class="gm-nav">
-  <a href="#" class="brand"><span class="brand-icon">🌱</span> GreenMind</a>
+  <a href="#" class="brand">
+    <svg width="28" height="28" viewBox="0 0 32 32" style="vertical-align:middle;margin-right:6px"><rect width="32" height="32" rx="8" fill="#060b11"/><path d="M16 6 C10 6 6 11 6 16 C6 20 9 23 13 24 C13 24 12 28 16 28 C20 28 19 24 19 24 C23 23 26 20 26 16 C26 11 22 6 16 6Z" fill="#00d26a"/><line x1="16" y1="28" x2="16" y2="16" stroke="#060b11" stroke-width="1.5"/></svg>
+    GreenMind
+  </a>
 
   <div class="carbon-pill" id="carbonPill">
     <span class="cdot" id="carbonDot" style="background:var(--muted)"></span>
