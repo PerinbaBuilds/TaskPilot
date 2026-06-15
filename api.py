@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from groq import Groq
 import os
@@ -9,6 +10,13 @@ from rl.agents import Agent
 from core.config import get_weights as _cfg_weights
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # ─────────────────────────────────────────────────────────────────
 # PATHS — resolved relative to this script so the server can be
