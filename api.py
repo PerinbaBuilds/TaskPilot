@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse
 import pandas as pd
 from groq import Groq
 import os
@@ -468,11 +468,11 @@ def get_sustainability_hint():
 # ─────────────────────────────────────────────────────────────────
 # HEALTH CHECK
 # ─────────────────────────────────────────────────────────────────
-_templates = Jinja2Templates(directory=os.path.join(BASE, "frontend", "templates"))
+_DASHBOARD = os.path.join(BASE, "frontend", "templates", "dashboard.html")
 
 @app.get("/")
-def root(request: Request):
-    return _templates.TemplateResponse("dashboard.html", {"request": request})
+def root():
+    return HTMLResponse(open(_DASHBOARD, encoding="utf-8").read())
 
 @app.get("/health")
 def health():
