@@ -357,11 +357,12 @@ body {
 
 /* ── SCHEDULER PROGRESS OVERLAY ── */
 #schedOverlay {
-  display: none; position: fixed; inset: 0; z-index: 9000;
-  background: rgba(6,11,17,0.88); backdrop-filter: blur(18px);
+  display: none !important;
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(6,11,17,0.92); backdrop-filter: blur(18px);
   align-items: center; justify-content: center;
 }
-#schedOverlay.active { display: flex; }
+#schedOverlay.active { display: flex !important; }
 .sched-modal {
   background: var(--card); border: 1px solid var(--border);
   border-radius: 20px; padding: 40px 44px; width: 460px; max-width: 92vw;
@@ -883,7 +884,7 @@ body {
 <!-- ════════════════ TOASTS ════════════════ -->
 <div id="toast-container"></div>
 
-<!-- Scheduler Progress Overlay -->
+<!-- Scheduler Progress Overlay — must be outside all layout containers -->
 <div id="schedOverlay">
   <div class="sched-modal">
     <h3><span id="schedOverlayIcon">⚙️</span> <span id="schedOverlayTitle">Running Scheduler</span></h3>
