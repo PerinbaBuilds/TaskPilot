@@ -1,12 +1,30 @@
+# Python
 __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
 build/
+
+# Environment
 .env
+.env.*
 .venv/
 venv/
-jobs*.csv
-!sample_jobs*.csv
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
 .streamlit/secrets.toml
+
+# Claude Code
 .claude/
+
+# Generated / temp job files
+jobs_*.csv
+generated_*.csv
