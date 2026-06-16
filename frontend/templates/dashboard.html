@@ -1492,8 +1492,8 @@ function renderJobsTables() {
       <td class="mono">#${j.job_id}</td>
       <td>${priorityBadge(j.priority)}</td>
       <td style="color:var(--muted)">${j.latency}</td>
-      <td style="color:var(--muted)">${j.cpu||'—'}%</td>
-      <td style="color:var(--muted)">${j.mem||'—'}%</td>
+      <td style="color:var(--muted)">${j.cpu||j.memory||'—'}%</td>
+      <td style="color:var(--muted)">${j.mem||j.memory||'—'}%</td>
     </tr>`).join('');
   } else { qEmp.style.display=''; qBody.innerHTML=''; }
 
@@ -1507,7 +1507,7 @@ function renderJobsTables() {
       <td>${priorityBadge(j.priority)}</td>
       <td style="color:var(--muted)">${j.latency}</td>
       <td><strong style="color:var(--green)">${j.chosen_dc}</strong></td>
-      <td style="color:var(--yellow)">${j.reward.toFixed(3)}</td>
+      <td style="color:var(--yellow)">${Math.max(0,j.reward).toFixed(3)}</td>
       <td class="mono">${j.power_kwh.toFixed(4)}</td>
       <td class="mono">${j.co2.toFixed(5)}</td>
       <td class="mono">${j.cost.toFixed(5)}</td>
@@ -1527,7 +1527,7 @@ function renderAnalytics() {
       <td class="mono">#${j.job_id}</td>
       <td>${priorityBadge(j.priority)}</td>
       <td style="color:var(--green)">${j.chosen_dc}</td>
-      <td style="color:var(--yellow)">${j.reward.toFixed(3)}</td>
+      <td style="color:var(--yellow)">${Math.max(0,j.reward).toFixed(3)}</td>
       <td class="mono">${j.power_kwh.toFixed(4)}</td>
       <td class="mono">${j.co2.toFixed(5)}</td>
       <td class="mono">${j.state.load.toFixed(3)}</td>

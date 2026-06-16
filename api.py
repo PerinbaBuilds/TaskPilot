@@ -372,7 +372,8 @@ def _xai_key(chosen_dc: str, priority: str, carbon_factor: float) -> str:
     band = "low" if carbon_factor < 0.33 else "high" if carbon_factor > 0.66 else "med"
     return f"{chosen_dc}|{priority}|{band}"
 
-def generate_explanation(job, state, chosen_dc, scores, breakdown, metrics) -> str:
+def generate_explanation(job, state, chosen_dc, scores, breakdown, metrics,
+                         rl_q: dict | None = None) -> str:
     priority   = job["priority"]
     cache_key  = _xai_key(chosen_dc, priority, state["carbon_factor"])
     if cache_key in _xai_cache:
@@ -410,9 +411,10 @@ Scores:
 {bd_text}
 
 Chosen: {chosen_dc} | energy={cm['energy_kwh']:.4f}kWh cost={cm['cost']:.6f} co2={cm['co2']:.6f} tier={cm['capacity_tier']:.2f}
+RL Q-values: {rl_q if rl_q else 'N/A'}
 
-In 3-4 sentences explain why {chosen_dc} won. Mention tier routing logic,
-the dominant metric, and current system conditions. Do not greet or start with I."""
+In 3-4 sentences explain why {chosen_dc} won. Reference the RL agent's Q-value decision,
+mention tier routing, dominant metric, and grid carbon conditions. Do not greet or use "I"."""
 
     try:
         resp = groq_client.chat.completions.create(
@@ -423,19 +425,30 @@ the dominant metric, and current system conditions. Do not greet or start with I
             timeout=10,
         )
         result = resp.choices[0].message.content.strip()
-    except Exception as e:
-        bd = breakdown[chosen_dc]
-        ru = sorted(
-            [(k, v["final"]) for k, v in breakdown.items()
-             if k != chosen_dc and v["in_pool"]],
+    except Exception:
+        # Natural-language fallback using RL Q-values and quality scores
+        bd   = breakdown[chosen_dc]
+        pool_rivals = sorted(
+            [(k, v["final"]) for k, v in breakdown.items() if k != chosen_dc and v["in_pool"]],
             key=lambda x: x[1], reverse=True,
         )
-        ru_str = f", runner-up: {ru[0][0]} @ {ru[0][1]:.3f}" if ru else ""
+
+        tier_desc = {"green": "energy-efficient", "balanced": "mid-tier", "performance": "high-throughput"}[priority]
+        dominant  = max(
+            [("CO₂ efficiency", bd["co2_score"]), ("cost efficiency", bd["cost_score"]),
+             ("throughput", bd["perf_score"]), ("low latency", bd["lat_score"])],
+            key=lambda x: x[1]
+        )[0]
+        carbon_desc = "low" if state["carbon_factor"] < 0.33 else "high" if state["carbon_factor"] > 0.66 else "moderate"
+        rival_txt   = f" outperforming {pool_rivals[0][0]} (score {pool_rivals[0][1]:.3f})" if pool_rivals else ""
+
         result = (
-            f"{chosen_dc} selected from pool {pool_names} for '{priority}' job "
-            f"(score: {scores[chosen_dc]:.3f}{ru_str}). "
-            f"CO2={bd['co2_score']:.3f}, cost={bd['cost_score']:.3f}, "
-            f"perf={bd['perf_score']:.3f}, lat={bd['lat_score']:.3f}."
+            f"{chosen_dc} was chosen by the RL agent from the {priority} tier pool "
+            f"({', '.join(pool_names)}), which contains {tier_desc} servers. "
+            f"With {carbon_desc} grid carbon intensity and system load at {state['load']:.0%}, "
+            f"the agent prioritised {dominant} — scoring {bd['final']:.3f}{rival_txt}. "
+            f"The {priority} weighting profile (perf×{w[0]}, cost×{w[1]}, CO₂×{w[2]}, lat×{w[3]}) "
+            f"guided this decision while balancing current server loads across the tier."
         )
 
     _xai_cache[cache_key] = result
@@ -467,6 +480,8 @@ def run_scheduler(request: Request):
         pool_servers = sorted(dc for dc, b in breakdown.items() if b["in_pool"])
 
         # ── RL AGENT PICKS THE SERVER ─────────────────────────────
+        feat   = None
+        reward = scores.get(max(pool_servers, key=lambda dc: scores[dc]), 0.5)
         if priority in _rl_agents:
             agent = _rl_agents[priority]
             pool_loads = [float(s["server_loads"].get(dc, 0)) for dc in pool_servers]
@@ -494,9 +509,12 @@ def run_scheduler(request: Request):
 
         s["server_loads"][chosen_dc] = s["server_loads"].get(chosen_dc, 0) + 1
 
-        explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics)
-        rl_q = {pool_servers[i]: float(np.round(_rl_agents[priority].q_values(feat)[i], 4))
-                for i in range(len(pool_servers))} if priority in _rl_agents else {}
+        if priority in _rl_agents and feat is not None:
+            rl_q = {pool_servers[i]: float(np.round(_rl_agents[priority].q_values(feat)[i], 4))
+                    for i in range(len(pool_servers))}
+        else:
+            rl_q = {}
+        explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics, rl_q)
 
         scheduled_jobs.append({
             "job_id":          job["job_id"],
