@@ -534,9 +534,38 @@ body {
     <div class="row">
       <div class="col-2">
         <div class="card">
-          <div class="card-header">Reward Timeline</div>
+          <div class="card-header" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Quality Score Timeline</span>
+            <span style="font-size:0.7rem;color:var(--muted);font-weight:400">RL agent decision quality per job (0–1)</span>
+          </div>
           <div class="card-body">
-            <div class="chart-wrap" style="height:220px"><canvas id="chartReward"></canvas></div>
+            <div class="chart-wrap" style="height:195px"><canvas id="chartReward"></canvas></div>
+            <!-- Infographic legend -->
+            <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
+              <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--muted)">
+                <div style="width:24px;height:3px;background:#00d26a;border-radius:2px"></div>
+                <span>3-job avg — short-term quality</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--muted)">
+                <div style="width:24px;height:2px;background:#4f9cf9;border-radius:2px;border-top:2px dashed #4f9cf9"></div>
+                <span>10-job trend — RL learning curve</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:6px;font-size:0.72rem;color:var(--muted)">
+                <div style="width:8px;height:8px;border-radius:50%;background:rgba(0,210,106,0.4)"></div>
+                <span>Raw per-job score</span>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <div style="flex:1;padding:5px 8px;background:rgba(0,210,106,0.08);border-left:2px solid #00d26a;border-radius:4px;font-size:0.7rem">
+                <span style="color:var(--green);font-weight:600">≥ 0.6</span> <span style="color:var(--muted)">Excellent — RL picked optimal server</span>
+              </div>
+              <div style="flex:1;padding:5px 8px;background:rgba(240,165,0,0.08);border-left:2px solid #f0a500;border-radius:4px;font-size:0.7rem">
+                <span style="color:var(--yellow);font-weight:600">0.3–0.6</span> <span style="color:var(--muted)">Good — balanced decision</span>
+              </div>
+              <div style="flex:1;padding:5px 8px;background:rgba(231,76,60,0.08);border-left:2px solid #e74c3c;border-radius:4px;font-size:0.7rem">
+                <span style="color:var(--red);font-weight:600">&lt; 0.3</span> <span style="color:var(--muted)">Agent exploring / learning</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1386,29 +1415,46 @@ function renderOverview() {
 
   if (!hasData) { destroyCharts(['chartReward','chartDoughnut','chartCarbon','chartPriority']); return; }
 
-  // Reward timeline
-  const labels = h.map((_,i) => i+1);
+  // Reward timeline — smooth 10-job rolling avg as primary, raw as faint background
+  const labels  = h.map((_,i) => i+1);
   const rewards = h.map(j => j.reward);
-  const rolling = rewards.map((_,i) => i>=4 ? avg(rewards.slice(i-4,i+1)) : null);
+  const win10   = rewards.map((_,i) => i>=9 ? avg(rewards.slice(i-9,i+1)) : avg(rewards.slice(0,i+1)));
+  const win3    = rewards.map((_,i) => i>=2 ? avg(rewards.slice(i-2,i+1)) : avg(rewards.slice(0,i+1)));
   destroyChart('chartReward');
   const cR = document.getElementById('chartReward').getContext('2d');
   charts.chartReward = new Chart(cR, {
     type:'line', data:{
       labels,
       datasets:[{
-        label:'Reward', data: rewards, tension:0.4, fill:true,
-        borderColor:'#00d26a', borderWidth:2, pointRadius:3, pointBackgroundColor:'#00d26a',
-        backgroundColor: makeGrad(cR,'rgba(0,210,106,0.25)','rgba(0,210,106,0)'),
+        // Raw signal — very faint, small dots
+        label:'Per-job score', data: rewards, tension:0.3, fill:false,
+        borderColor:'rgba(0,210,106,0.2)', borderWidth:1,
+        pointRadius:2, pointBackgroundColor:'rgba(0,210,106,0.35)',
+        pointHoverRadius:4,
       },{
-        label:'5-job avg', data: rolling, tension:0.4, fill:false,
-        borderColor:'#4f9cf9', borderWidth:1.5, borderDash:[5,4],
-        pointRadius:0,
+        // 3-job avg — medium smoothing, thicker green line with fill
+        label:'3-job avg', data: win3, tension:0.5, fill:true,
+        borderColor:'#00d26a', borderWidth:2.5, pointRadius:0,
+        backgroundColor: makeGrad(cR,'rgba(0,210,106,0.18)','rgba(0,210,106,0)'),
+      },{
+        // 10-job trend — smooth trend line
+        label:'10-job trend', data: win10, tension:0.6, fill:false,
+        borderColor:'#4f9cf9', borderWidth:2, pointRadius:0,
+        borderDash:[6,3],
       }]
     },
     options:{
       responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{position:'top',labels:{boxWidth:12,font:{size:10}}},tooltip:{...TOOLTIP_DEFAULTS}},
-      scales:{x:{grid:GRID,ticks:TICK},y:{grid:GRID,ticks:TICK,min:0,max:1}},
+      plugins:{
+        legend:{position:'top',labels:{boxWidth:10,font:{size:10},usePointStyle:true}},
+        tooltip:{...TOOLTIP_DEFAULTS, callbacks:{label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}`}}
+      },
+      scales:{
+        x:{grid:GRID, ticks:{...TICK, maxTicksLimit:15}},
+        y:{grid:GRID, ticks:TICK, min:0, max:1,
+           title:{display:true, text:'Quality Score', color:'#6b7d8f', font:{size:10}}}
+      },
+      animation:{duration:400},
     }
   });
 
@@ -1601,23 +1647,33 @@ function renderAnalytics() {
     }
   });
 
-  // Energy intensity histogram (simple bins)
-  const ef = h.map(j=>j.state.energy_factor);
-  const bins = 10; const mn=Math.min(...ef), mx=Math.max(...ef), step=(mx-mn)/bins||0.1;
-  const binCounts = Array(bins).fill(0);
-  ef.forEach(v => { const idx=Math.min(Math.floor((v-mn)/step),bins-1); binCounts[idx]++; });
-  const binLabels = Array.from({length:bins},(_,i)=>(mn+i*step).toFixed(2));
+  // Energy intensity histogram — 5 descriptive bands based on relative quintiles
+  const ef = h.map(j=>j.state.energy_factor).sort((a,b)=>a-b);
+  const bandLabels = ['Very Low','Low','Medium','High','Very High'];
+  const bandColors = [
+    'rgba(0,210,106,0.75)','rgba(82,196,26,0.7)','rgba(240,165,0,0.7)',
+    'rgba(231,120,50,0.7)','rgba(231,76,60,0.75)'
+  ];
+  const bandBorder = ['#00d26a','#52c41a','#f0a500','#e77832','#e74c3c'];
+  const efMn=ef[0], efMx=ef[ef.length-1], efRng=efMx-efMn||0.001;
+  const bandCounts = [0,0,0,0,0];
+  ef.forEach(v => {
+    const idx = Math.min(Math.floor(((v-efMn)/efRng)*5), 4);
+    bandCounts[idx]++;
+  });
   destroyChart('chartEnergyDist');
   const cED = document.getElementById('chartEnergyDist').getContext('2d');
   charts.chartEnergyDist = new Chart(cED, {
-    type:'bar', data:{labels:binLabels, datasets:[{
-      label:'Frequency', data:binCounts, borderRadius:4,
-      backgroundColor: makeGrad(cED,'rgba(79,156,249,0.7)','rgba(79,156,249,0.2)'),
-      borderColor:'#4f9cf9', borderWidth:1,
+    type:'bar', data:{labels:bandLabels, datasets:[{
+      label:'Jobs', data:bandCounts, borderRadius:6,
+      backgroundColor: bandColors, borderColor: bandBorder, borderWidth:1,
     }]},
     options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{legend:{display:false},tooltip:{...TOOLTIP_DEFAULTS}},
-      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:TICK}},
+      plugins:{legend:{display:false},tooltip:{
+        ...TOOLTIP_DEFAULTS,
+        callbacks:{label: ctx=>`${ctx.parsed.y} jobs in this energy band`}
+      }},
+      scales:{x:{grid:{display:false},ticks:TICK},y:{grid:GRID,ticks:{...TICK,stepSize:1}}},
     }
   });
 }
