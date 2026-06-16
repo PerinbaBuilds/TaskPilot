@@ -52,7 +52,14 @@ _sessions: dict = {}
 
 def _get_session(sid: str) -> dict:
     if sid not in _sessions:
-        _sessions[sid] = {"job_queue": [], "job_id_counter": 0, "submitted_ids": set()}
+        server_ids = [f"Server {int(row['ID'])}" for _, row in SERVERS.iterrows()] if len(SERVERS) else []
+        _sessions[sid] = {
+            "job_queue": [],
+            "job_id_counter": 0,
+            "submitted_ids": set(),
+            "server_loads": {dc: 0 for dc in server_ids},  # jobs assigned per server
+            "rr_index": {"green": 0, "balanced": 0, "performance": 0},  # round-robin pointers
+        }
     return _sessions[sid]
 
 # ─────────────────────────────────────────────────────────────────
@@ -190,6 +197,8 @@ def reset_state(request: Request):
     s["job_queue"]      = []
     s["submitted_ids"]  = set()
     s["job_id_counter"] = 0
+    s["server_loads"]   = {f"Server {int(row['ID'])}": 0 for _, row in SERVERS.iterrows()}
+    s["rr_index"]       = {"green": 0, "balanced": 0, "performance": 0}
     DATA_PTR = 0
     STEEL_PTR = 0
     return {"status": "reset ok"}
@@ -240,7 +249,7 @@ def minmax(values: list) -> list:
 # ─────────────────────────────────────────────────────────────────
 # COMPUTE SCORES
 # ─────────────────────────────────────────────────────────────────
-def compute_scores(state: dict, priority: str) -> tuple[dict, dict, dict]:
+def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict, dict, dict]:
     w        = PRIORITY_WEIGHTS[priority]
     pool_df  = get_tier_pool(priority)
     pool_pos = set(pool_df.index.tolist())
@@ -281,16 +290,26 @@ def compute_scores(state: dict, priority: str) -> tuple[dict, dict, dict]:
 
     scores, metrics, score_breakdown = {}, {}, {}
 
+    # Least-connections load score: invert normalised job count so idle servers score higher
+    pool_dcs   = [server_ids[i] for i in pool_positions]
+    pool_loads = [server_loads.get(dc, 0) for dc in pool_dcs]
+    max_load   = max(pool_loads) if pool_loads else 1
+    # avoid all-zero division; if everyone has 0 jobs load_score = 1.0 for all
+    lc_scores  = {dc: 1.0 - (server_loads.get(dc, 0) / (max_load + 1)) for dc in pool_dcs}
+
     for i, dc in enumerate(server_ids):
         in_pool = (SERVERS.index[i] in pool_pos)
 
         if in_pool:
             ps, cs, gs, ls = pool_norm[dc]
-            base  = ps * w[0] + cs * w[1] + gs * w[2] + ls * w[3]
-            noise = random.uniform(-0.03, 0.03)
-            score = round(min(max(base + noise, 0.0), 1.0), 4)
+            static = ps * w[0] + cs * w[1] + gs * w[2] + ls * w[3]
+            # Blend: 60% static quality score + 40% least-connections load balance
+            lc     = lc_scores.get(dc, 1.0)
+            base   = 0.60 * static + 0.40 * lc
+            noise  = random.uniform(-0.01, 0.01)
+            score  = round(min(max(base + noise, 0.0), 1.0), 4)
         else:
-            ps = cs = gs = ls = 0.0
+            ps = cs = gs = ls = static = lc = 0.0
             score = 0.0
 
         scores[dc]  = score
@@ -301,13 +320,14 @@ def compute_scores(state: dict, priority: str) -> tuple[dict, dict, dict]:
             "capacity_tier": round(SERVERS.iloc[i]["capacity_tier"], 4),
         }
         score_breakdown[dc] = {
-            "perf_score":  round(ps, 4),
-            "cost_score":  round(cs, 4),
-            "co2_score":   round(gs, 4),
-            "lat_score":   round(ls, 4),
+            "perf_score":     round(ps, 4),
+            "cost_score":     round(cs, 4),
+            "co2_score":      round(gs, 4),
+            "lat_score":      round(ls, 4),
+            "lc_score":       round(lc_scores.get(dc, 0.0), 4),
             "capacity_score": round(SERVERS.iloc[i]["capacity_tier"], 4),
-            "final":       round(score, 4),
-            "in_pool":     in_pool,
+            "final":          round(score, 4),
+            "in_pool":        in_pool,
         }
 
     # ─────────────────────────────────────────────────────────────
@@ -413,14 +433,24 @@ the dominant metric, and current system conditions. Do not greet or start with I
 def run_scheduler(request: Request):
     sid = request.headers.get("X-Session-ID", "default")
     s = _get_session(sid)
+    # Ensure server_loads key exists for older sessions
+    if "server_loads" not in s:
+        s["server_loads"] = {f"Server {int(row['ID'])}": 0 for _, row in SERVERS.iterrows()}
+    if "rr_index" not in s:
+        s["rr_index"] = {"green": 0, "balanced": 0, "performance": 0}
+
     scheduled_jobs = []
     while s["job_queue"]:
         job   = s["job_queue"].pop(0)
         state = compute_state()
-        scores, metrics, breakdown = compute_scores(state, job["priority"])
+        scores, metrics, breakdown = compute_scores(state, job["priority"], s["server_loads"])
 
         pool_scores = {dc: sc for dc, sc in scores.items() if breakdown[dc]["in_pool"]}
         chosen_dc   = max(pool_scores, key=pool_scores.get)
+
+        # Track load so next job in same tier prefers less-loaded servers
+        s["server_loads"][chosen_dc] = s["server_loads"].get(chosen_dc, 0) + 1
+
         explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics)
 
         scheduled_jobs.append({
@@ -438,7 +468,7 @@ def run_scheduler(request: Request):
             "all_metrics":     metrics,
             "explanation":     explanation,
         })
-    return {"scheduled_jobs": scheduled_jobs}
+    return {"scheduled_jobs": scheduled_jobs, "server_loads": s["server_loads"]}
 
 
 # ─────────────────────────────────────────────────────────────────
