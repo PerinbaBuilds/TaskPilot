@@ -1,5 +1,5 @@
 """
-Multi-agent RL training for GreenMind cloud scheduler.
+Multi-agent RL training for TaskPilot cloud scheduler.
 
 Each agent represents a data centre and learns to score incoming jobs
 using linear function approximation (numpy) and TD-error weight updates.

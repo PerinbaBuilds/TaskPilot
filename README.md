@@ -1,4 +1,4 @@
-# 🌱 GreenMind — Sustainable Cloud Job Scheduler
+# 🌱 TaskPilot — Sustainable Cloud Job Scheduler
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/></a>
@@ -18,9 +18,9 @@
 
 ---
 
-## 🚀 What Is GreenMind?
+## 🚀 What Is TaskPilot?
 
-Most cloud schedulers optimise for speed and cost alone. GreenMind adds a third dimension: **sustainability**.
+Most cloud schedulers optimise for speed and cost alone. TaskPilot adds a third dimension: **sustainability**.
 
 It routes each compute job to the server that best balances:
 

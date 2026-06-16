@@ -497,4 +497,4 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"message": "GreenMind API — tier-pool routing active"}
+    return {"message": "TaskPilot API — tier-pool routing active"}
