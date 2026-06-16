@@ -290,26 +290,28 @@ def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict
 
     scores, metrics, score_breakdown = {}, {}, {}
 
-    # Least-connections load score: invert normalised job count so idle servers score higher
+    # ── LEAST-CONNECTIONS within tier pool ─────────────────────────
+    # Each server in the pool gets a load score inversely proportional
+    # to how many jobs it already holds. Servers with equal load score
+    # equally so quality score acts as tiebreaker.
     pool_dcs   = [server_ids[i] for i in pool_positions]
     pool_loads = [server_loads.get(dc, 0) for dc in pool_dcs]
-    max_load   = max(pool_loads) if pool_loads else 1
-    # avoid all-zero division; if everyone has 0 jobs load_score = 1.0 for all
-    lc_scores  = {dc: 1.0 - (server_loads.get(dc, 0) / (max_load + 1)) for dc in pool_dcs}
+    min_load   = min(pool_loads) if pool_loads else 0
 
     for i, dc in enumerate(server_ids):
         in_pool = (SERVERS.index[i] in pool_pos)
 
         if in_pool:
             ps, cs, gs, ls = pool_norm[dc]
-            static = ps * w[0] + cs * w[1] + gs * w[2] + ls * w[3]
-            # Blend: 60% static quality score + 40% least-connections load balance
-            lc     = lc_scores.get(dc, 1.0)
-            base   = 0.60 * static + 0.40 * lc
-            noise  = random.uniform(-0.01, 0.01)
-            score  = round(min(max(base + noise, 0.0), 1.0), 4)
+            quality = ps * w[0] + cs * w[1] + gs * w[2] + ls * w[3]
+            jobs_on_dc = server_loads.get(dc, 0)
+            # LC score: 1.0 if at minimum load, 0.0 if overloaded by ≥10 jobs above min
+            lc = max(0.0, 1.0 - (jobs_on_dc - min_load) / 10.0)
+            # Final: LC dominates (80%) to guarantee spread; quality breaks ties (20%)
+            score = round(min(max(0.80 * lc + 0.20 * quality, 0.0), 1.0), 4)
+            lc_val = round(lc, 4)
         else:
-            ps = cs = gs = ls = static = lc = 0.0
+            ps = cs = gs = ls = quality = lc_val = 0.0
             score = 0.0
 
         scores[dc]  = score
@@ -324,16 +326,13 @@ def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict
             "cost_score":     round(cs, 4),
             "co2_score":      round(gs, 4),
             "lat_score":      round(ls, 4),
-            "lc_score":       round(lc_scores.get(dc, 0.0), 4),
+            "lc_score":       lc_val,
             "capacity_score": round(SERVERS.iloc[i]["capacity_tier"], 4),
             "final":          round(score, 4),
             "in_pool":        in_pool,
         }
 
-    # ─────────────────────────────────────────────────────────────
-    # RL AGENT BLENDING — apply after main scoring loop
-    # Blend: 75% static, 25% RL-informed
-    # ─────────────────────────────────────────────────────────────
+    # ── RL SIGNAL as quality nudge (doesn't override LC distribution) ──
     if _rl_agents and priority in _rl_agents:
         state_vec = np.array([
             1.0 - state['carbon_factor'],
@@ -341,14 +340,14 @@ def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict
             0.5,
             state['energy_price'],
         ], dtype=np.float32)
-        rl_raw = _rl_agents[priority].act(state_vec)
+        rl_raw   = _rl_agents[priority].act(state_vec)
         rl_score = _sigmoid(rl_raw)
         for i, dc in enumerate(server_ids):
-            in_pool = score_breakdown[dc]['in_pool']
-            if in_pool:
-                score = round(min(max(0.75 * scores[dc] + 0.25 * rl_score, 0.0), 1.0), 4)
-                scores[dc] = score
-                score_breakdown[dc]['final'] = score
+            if score_breakdown[dc]['in_pool']:
+                # Blend RL only into the quality portion (20%), not the LC portion
+                blended = round(min(max(scores[dc] + 0.05 * rl_score, 0.0), 1.0), 4)
+                scores[dc] = blended
+                score_breakdown[dc]['final']    = blended
                 score_breakdown[dc]['rl_score'] = round(rl_score, 4)
             else:
                 score_breakdown[dc]['rl_score'] = 0.0
@@ -360,10 +359,22 @@ def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict
 
 
 # ─────────────────────────────────────────────────────────────────
-# XAI – LLM EXPLANATION VIA GROQ
+# XAI – LLM EXPLANATION VIA GROQ (with caching)
+# Cache key = (server, priority, carbon_band) — max ~27 unique Groq
+# calls across the whole session regardless of batch size.
 # ─────────────────────────────────────────────────────────────────
+_xai_cache: dict = {}
+
+def _xai_key(chosen_dc: str, priority: str, carbon_factor: float) -> str:
+    band = "low" if carbon_factor < 0.33 else "high" if carbon_factor > 0.66 else "med"
+    return f"{chosen_dc}|{priority}|{band}"
+
 def generate_explanation(job, state, chosen_dc, scores, breakdown, metrics) -> str:
     priority   = job["priority"]
+    cache_key  = _xai_key(chosen_dc, priority, state["carbon_factor"])
+    if cache_key in _xai_cache:
+        return _xai_cache[cache_key]
+
     w          = PRIORITY_WEIGHTS[priority]
     pool_names = [
         f"Server {int(row['ID'])}"
@@ -408,7 +419,7 @@ the dominant metric, and current system conditions. Do not greet or start with I
             temperature=0.4,
             timeout=10,
         )
-        return resp.choices[0].message.content.strip()
+        result = resp.choices[0].message.content.strip()
     except Exception as e:
         bd = breakdown[chosen_dc]
         ru = sorted(
@@ -417,13 +428,15 @@ the dominant metric, and current system conditions. Do not greet or start with I
             key=lambda x: x[1], reverse=True,
         )
         ru_str = f", runner-up: {ru[0][0]} @ {ru[0][1]:.3f}" if ru else ""
-        return (
-            f"{chosen_dc} selected from pool {pool_names} for '{priority}' job"
+        result = (
+            f"{chosen_dc} selected from pool {pool_names} for '{priority}' job "
             f"(score: {scores[chosen_dc]:.3f}{ru_str}). "
             f"CO2={bd['co2_score']:.3f}, cost={bd['cost_score']:.3f}, "
-            f"perf={bd['perf_score']:.3f}, lat={bd['lat_score']:.3f}. "
-            f"[Groq error: {str(e)[:80]}]"
+            f"perf={bd['perf_score']:.3f}, lat={bd['lat_score']:.3f}."
         )
+
+    _xai_cache[cache_key] = result
+    return result
 
 
 # ─────────────────────────────────────────────────────────────────

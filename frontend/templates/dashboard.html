@@ -354,6 +354,62 @@ body {
 .mb-4 { margin-bottom: 16px; }
 .mb-8 { margin-bottom: 8px; }
 .mt-4 { margin-top: 16px; }
+
+/* ── SCHEDULER PROGRESS OVERLAY ── */
+#schedOverlay {
+  display: none; position: fixed; inset: 0; z-index: 9000;
+  background: rgba(6,11,17,0.88); backdrop-filter: blur(18px);
+  align-items: center; justify-content: center;
+}
+#schedOverlay.active { display: flex; }
+.sched-modal {
+  background: var(--card); border: 1px solid var(--border);
+  border-radius: 20px; padding: 40px 44px; width: 460px; max-width: 92vw;
+  box-shadow: 0 0 80px rgba(0,210,106,0.12);
+  animation: modalIn 0.35s cubic-bezier(.16,1,.3,1);
+}
+@keyframes modalIn { from { opacity:0; transform: scale(0.92) translateY(20px); } to { opacity:1; transform: none; } }
+.sched-modal h3 {
+  font-size: 1.05rem; font-weight: 700; color: var(--text);
+  margin-bottom: 6px; display: flex; align-items: center; gap: 10px;
+}
+.sched-modal .sub { font-size: 0.78rem; color: var(--muted); margin-bottom: 28px; }
+.sched-phase {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+  font-size: 0.86rem; color: var(--muted); transition: color 0.3s;
+}
+.sched-phase:last-child { border-bottom: none; }
+.sched-phase.done  { color: var(--green); }
+.sched-phase.active { color: var(--text); }
+.phase-icon {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(255,255,255,0.04); font-size: 0.9rem;
+  border: 1px solid var(--border); transition: all 0.3s;
+}
+.sched-phase.done  .phase-icon { background: rgba(0,210,106,0.15); border-color: var(--green); color: var(--green); }
+.sched-phase.active .phase-icon { background: rgba(79,156,249,0.15); border-color: var(--blue); color: var(--blue); animation: pulseBorder 1s ease-in-out infinite; }
+@keyframes pulseBorder { 0%,100%{box-shadow:0 0 0 0 rgba(79,156,249,0.4)} 50%{box-shadow:0 0 0 6px rgba(79,156,249,0)} }
+.phase-label { flex: 1; }
+.phase-status { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.04em; }
+.sched-phase.done  .phase-status { color: var(--green); }
+.sched-phase.active .phase-status { color: var(--blue); }
+.sched-progress-wrap { margin-top: 28px; }
+.sched-progress-bar {
+  height: 5px; background: rgba(255,255,255,0.06); border-radius: 99px; overflow: hidden;
+}
+.sched-progress-fill {
+  height: 100%; background: linear-gradient(90deg, #00d26a, #4f9cf9);
+  border-radius: 99px; transition: width 0.5s ease; width: 0%;
+}
+.sched-counter { margin-top: 10px; font-size: 0.75rem; color: var(--muted); text-align: right; }
+
+/* upload bar */
+.upload-progress-wrap { margin-top: 8px; display:none; }
+.upload-progress-bar { height: 3px; background: rgba(255,255,255,0.06); border-radius:99px; overflow:hidden; }
+.upload-progress-fill { height:100%; background: var(--green); border-radius:99px; transition: width 0.2s ease; width:0%; }
+.upload-progress-label { font-size:0.72rem; color:var(--muted); margin-top:4px; }
 </style>
 </head>
 <body>
@@ -805,6 +861,10 @@ body {
       <div class="upload-icon"><i class="fa fa-file-csv"></i></div>
       <div class="upload-text">Click to upload jobs.csv<br><small>Columns: priority, latency, cpu, memory</small></div>
       <input type="file" id="csvInput" accept=".csv" onchange="uploadCSV(this)">
+      <div class="upload-progress-wrap" style="display:none;padding:0 4px 4px">
+        <div class="upload-progress-bar"><div class="upload-progress-fill"></div></div>
+        <div class="upload-progress-label" style="font-size:0.72rem;color:var(--muted);margin-top:4px;text-align:right"></div>
+      </div>
     </div>
     <div style="margin-top:8px;padding:8px 10px;background:rgba(0,210,106,0.06);border:1px solid rgba(0,210,106,0.15);border-radius:6px;font-size:0.72rem;color:var(--muted);line-height:1.6">
       <b style="color:var(--green)">Required:</b> <code style="color:#aaa">priority</code> — one of <code style="color:#aaa">green</code>, <code style="color:#aaa">balanced</code>, <code style="color:#aaa">performance</code><br>
@@ -816,6 +876,45 @@ body {
 
 <!-- ════════════════ TOASTS ════════════════ -->
 <div id="toast-container"></div>
+
+<!-- Scheduler Progress Overlay -->
+<div id="schedOverlay">
+  <div class="sched-modal">
+    <h3><span id="schedOverlayIcon">⚙️</span> <span id="schedOverlayTitle">Running Scheduler</span></h3>
+    <div class="sub" id="schedOverlaySub">Routing <strong id="schedJobCount">0</strong> jobs across 9 servers…</div>
+    <div id="schedPhases">
+      <div class="sched-phase" id="phase0">
+        <div class="phase-icon">📦</div>
+        <div class="phase-label">Uploading jobs to queue</div>
+        <div class="phase-status" id="phaseStatus0">WAITING</div>
+      </div>
+      <div class="sched-phase" id="phase1">
+        <div class="phase-icon">⚡</div>
+        <div class="phase-label">Fetching real-time energy &amp; carbon data</div>
+        <div class="phase-status" id="phaseStatus1">WAITING</div>
+      </div>
+      <div class="sched-phase" id="phase2">
+        <div class="phase-icon">🤖</div>
+        <div class="phase-label">Consulting RL agents (green / balanced / performance)</div>
+        <div class="phase-status" id="phaseStatus2">WAITING</div>
+      </div>
+      <div class="sched-phase" id="phase3">
+        <div class="phase-icon">🌿</div>
+        <div class="phase-label">Routing jobs to tier pools &amp; selecting servers</div>
+        <div class="phase-status" id="phaseStatus3">WAITING</div>
+      </div>
+      <div class="sched-phase" id="phase4">
+        <div class="phase-icon">💬</div>
+        <div class="phase-label">Generating XAI explanations via Groq LLM</div>
+        <div class="phase-status" id="phaseStatus4">WAITING</div>
+      </div>
+    </div>
+    <div class="sched-progress-wrap">
+      <div class="sched-progress-bar"><div class="sched-progress-fill" id="schedProgressFill"></div></div>
+      <div class="sched-counter" id="schedProgressLabel">0%</div>
+    </div>
+  </div>
+</div>
 
 <script>
 const API = '';
@@ -970,22 +1069,78 @@ async function submitJob() {
   } catch(e) { toast('Failed to connect to API', 'error'); }
 }
 
+// ── PROGRESS OVERLAY HELPERS ──────────────────────────────────────
+function overlayShow(jobCount) {
+  document.getElementById('schedJobCount').textContent = jobCount;
+  document.getElementById('schedOverlayTitle').textContent = 'Running Scheduler';
+  document.getElementById('schedOverlayIcon').textContent = '⚙️';
+  ['phase0','phase1','phase2','phase3','phase4'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('done','active');
+  });
+  ['phaseStatus0','phaseStatus1','phaseStatus2','phaseStatus3','phaseStatus4'].forEach(id => {
+    document.getElementById(id).textContent = 'WAITING';
+  });
+  overlayProgress(0);
+  document.getElementById('schedOverlay').classList.add('active');
+}
+function overlayHide() {
+  document.getElementById('schedOverlay').classList.remove('active');
+}
+function overlayStep(idx, status) {
+  const el = document.getElementById('phase' + idx);
+  if (status === 'active') {
+    el.classList.remove('done'); el.classList.add('active');
+    document.getElementById('phaseStatus' + idx).textContent = 'IN PROGRESS';
+  } else if (status === 'done') {
+    el.classList.remove('active'); el.classList.add('done');
+    document.getElementById('phaseStatus' + idx).textContent = '✓ DONE';
+  }
+}
+function overlayProgress(pct) {
+  document.getElementById('schedProgressFill').style.width = pct + '%';
+  document.getElementById('schedProgressLabel').textContent = Math.round(pct) + '%';
+}
+
 // ── RUN SCHEDULER ─────────────────────────────────────────────────
 async function runScheduler() {
   const btn = document.getElementById('btnRun');
   const icon = document.getElementById('btnRunIcon');
   const text = document.getElementById('btnRunText');
+  if (!queue.length) { toast('No jobs in queue', 'info'); return; }
   btn.disabled = true;
   btn.classList.remove('pulsing');
   icon.innerHTML = '<span class="spinner"></span>';
   text.textContent = 'Running…';
+  overlayShow(queue.length);
   try {
-    if (!queue.length) { toast('No jobs in queue', 'info'); return; }
+    // Phase 0: upload batch
+    overlayStep(0, 'active'); overlayProgress(5);
     await fetch(`${API}/submit_batch`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(queue)});
+    overlayStep(0, 'done'); overlayProgress(20);
+
+    // Phase 1: energy/carbon (visual delay so user sees it)
+    overlayStep(1, 'active'); overlayProgress(30);
+    await new Promise(r => setTimeout(r, 400));
+    overlayStep(1, 'done'); overlayProgress(45);
+
+    // Phase 2: RL agents
+    overlayStep(2, 'active'); overlayProgress(55);
+    await new Promise(r => setTimeout(r, 300));
+    overlayStep(2, 'done'); overlayProgress(60);
+
+    // Phase 3+4: actual scheduling + XAI (the real wait)
+    overlayStep(3, 'active'); overlayProgress(65);
     const r = await fetch(`${API}/run`, {method:'POST', headers:apiHeaders()});
+    overlayStep(3, 'done');
+    overlayStep(4, 'active'); overlayProgress(88);
     const d = await r.json();
+    overlayStep(4, 'done'); overlayProgress(100);
+
     const jobs = d.scheduled_jobs || [];
     if (d.server_loads) { localStorage.setItem('tp_server_loads_' + SID, JSON.stringify(d.server_loads)); }
+    await new Promise(r => setTimeout(r, 500));
+    overlayHide();
     if (jobs.length) {
       history.push(...jobs);
       queue = [];
@@ -995,11 +1150,14 @@ async function runScheduler() {
       updateNavExport();
       renderOverview();
       renderJobsTables();
-      toast(`✓ Scheduled ${jobs.length} job${jobs.length>1?'s':''} successfully`, 'success');
+      toast(`✓ Scheduled ${jobs.length} job${jobs.length>1?'s':''} across all servers`, 'success');
     } else {
-      toast('No jobs in queue', 'info');
+      toast('No jobs returned from scheduler', 'info');
     }
-  } catch(e) { toast('Scheduler error — is the API running?', 'error'); }
+  } catch(e) {
+    overlayHide();
+    toast('Scheduler error — is the API running?', 'error');
+  }
   icon.innerHTML = '<i class="fa fa-play"></i>';
   text.textContent = 'Run Scheduler';
   btn.disabled = queue.length === 0;
@@ -1042,33 +1200,55 @@ function confirmReset() {
 async function uploadCSV(input) {
   const file = input.files[0];
   if (!file) return;
+  const uploadArea = input.closest('.upload-area') || input.parentElement;
+  const progWrap = uploadArea.querySelector('.upload-progress-wrap');
+  const progFill = uploadArea.querySelector('.upload-progress-fill');
+  const progLabel = uploadArea.querySelector('.upload-progress-label');
+  if (progWrap) progWrap.style.display = 'block';
+
   const text = await file.text();
-  const lines = text.trim().split('\n');
+  const lines = text.trim().split('\n').filter(l => l.trim());
   const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
   const pIdx   = headers.indexOf('priority');
   const lIdx   = headers.indexOf('latency');
   const cpuIdx = headers.indexOf('cpu');
   const memIdx = headers.indexOf('memory');
-  if (pIdx === -1) { toast('CSV must have a "priority" column', 'error'); return; }
-  let added = 0;
+  if (pIdx === -1) { toast('CSV must have a "priority" column', 'error'); input.value=''; return; }
+
+  // Parse all rows locally first (instant)
+  const payloads = [];
   for (let i = 1; i < lines.length; i++) {
-    if (!lines[i].trim()) continue;
     const cols = lines[i].split(',');
     const cpu  = cpuIdx >= 0 ? parseInt(cols[cpuIdx]) || 50 : 50;
     const mem  = memIdx >= 0 ? parseInt(cols[memIdx]) || 50 : 50;
-    const payload = {
+    payloads.push({
       priority: (cols[pIdx]||'balanced').trim(),
       latency:  lIdx >= 0 ? (cols[lIdx]||'medium').trim() : 'medium',
       cpu, memory: mem,
-    };
-    try {
-      const r = await fetch(`${API}/submit`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payload)});
-      const d = await r.json();
-      if (!d.status) { queue.push({job_id:d.job_id, ...payload, cpu, mem}); added++; }
-    } catch {}
+    });
   }
-  save(); updateQueueBadge(); renderJobsTables();
-  toast(`Added ${added} jobs from CSV`, 'success');
+
+  if (progFill) progFill.style.width = '40%';
+  if (progLabel) progLabel.textContent = `Uploading ${payloads.length} jobs…`;
+
+  // Single batch call instead of N individual fetches
+  try {
+    const r = await fetch(`${API}/submit_batch`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payloads)});
+    const d = await r.json();
+    const ids = d.job_ids || [];
+    ids.forEach((id, idx) => {
+      const p = payloads[idx];
+      if (p) queue.push({job_id: id, ...p, mem: p.memory});
+    });
+    if (progFill) progFill.style.width = '100%';
+    if (progLabel) progLabel.textContent = `✓ ${ids.length} jobs loaded`;
+    setTimeout(() => { if (progWrap) progWrap.style.display='none'; }, 2000);
+    save(); updateQueueBadge(); renderJobsTables();
+    toast(`Added ${ids.length} jobs from CSV — hit Run Scheduler`, 'success');
+  } catch(e) {
+    toast('Upload failed — is the API running?', 'error');
+    if (progWrap) progWrap.style.display = 'none';
+  }
   input.value = '';
 }
 
