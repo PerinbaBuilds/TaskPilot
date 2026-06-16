@@ -459,9 +459,13 @@ def run_scheduler(request: Request):
         scores, metrics, breakdown = compute_scores(state, job["priority"], s["server_loads"])
 
         pool_scores = {dc: sc for dc, sc in scores.items() if breakdown[dc]["in_pool"]}
-        chosen_dc   = max(pool_scores, key=pool_scores.get)
+        # Least-connections with quality as tiebreaker:
+        # primary sort = fewest jobs assigned, secondary = highest score
+        chosen_dc = min(
+            pool_scores,
+            key=lambda dc: (s["server_loads"].get(dc, 0), -pool_scores[dc])
+        )
 
-        # Track load so next job in same tier prefers less-loaded servers
         s["server_loads"][chosen_dc] = s["server_loads"].get(chosen_dc, 0) + 1
 
         explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics)
