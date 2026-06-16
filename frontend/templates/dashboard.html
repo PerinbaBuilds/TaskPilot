@@ -803,12 +803,12 @@ body {
     <label class="form-label">Bulk CSV Upload</label>
     <div class="upload-area" onclick="document.getElementById('csvInput').click()">
       <div class="upload-icon"><i class="fa fa-file-csv"></i></div>
-      <div class="upload-text">Click to upload jobs.csv<br><small>Columns: priority, latency (optional: cpu, mem)</small></div>
+      <div class="upload-text">Click to upload jobs.csv<br><small>Columns: priority, latency, cpu, memory</small></div>
       <input type="file" id="csvInput" accept=".csv" onchange="uploadCSV(this)">
     </div>
     <div style="margin-top:8px;padding:8px 10px;background:rgba(0,210,106,0.06);border:1px solid rgba(0,210,106,0.15);border-radius:6px;font-size:0.72rem;color:var(--muted);line-height:1.6">
       <b style="color:var(--green)">Required:</b> <code style="color:#aaa">priority</code> — one of <code style="color:#aaa">green</code>, <code style="color:#aaa">balanced</code>, <code style="color:#aaa">performance</code><br>
-      <b style="color:var(--green)">Optional:</b> <code style="color:#aaa">latency</code> (low / medium / high) &nbsp;|&nbsp; <code style="color:#aaa">cpu</code> (0–100) &nbsp;|&nbsp; <code style="color:#aaa">mem</code> (0–100)<br>
+      <b style="color:var(--green)">Optional:</b> <code style="color:#aaa">latency</code> (low / medium / high) &nbsp;|&nbsp; <code style="color:#aaa">cpu</code> (0–100) &nbsp;|&nbsp; <code style="color:#aaa">memory</code> (0–100)<br>
       <b style="color:var(--green)">Example row:</b> <code style="color:#aaa">green, low, 70, 50</code>
     </div>
   </div>
@@ -1044,21 +1044,27 @@ async function uploadCSV(input) {
   if (!file) return;
   const text = await file.text();
   const lines = text.trim().split('\n');
-  const headers = lines[0].toLowerCase().split(',');
-  const pIdx = headers.indexOf('priority');
-  const lIdx = headers.indexOf('latency');
+  const headers = lines[0].toLowerCase().split(',').map(h => h.trim());
+  const pIdx   = headers.indexOf('priority');
+  const lIdx   = headers.indexOf('latency');
+  const cpuIdx = headers.indexOf('cpu');
+  const memIdx = headers.indexOf('memory');
   if (pIdx === -1) { toast('CSV must have a "priority" column', 'error'); return; }
   let added = 0;
   for (let i = 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
     const cols = lines[i].split(',');
+    const cpu  = cpuIdx >= 0 ? parseInt(cols[cpuIdx]) || 50 : 50;
+    const mem  = memIdx >= 0 ? parseInt(cols[memIdx]) || 50 : 50;
     const payload = {
       priority: (cols[pIdx]||'balanced').trim(),
-      latency:  lIdx>=0?(cols[lIdx]||'medium').trim():'medium',
+      latency:  lIdx >= 0 ? (cols[lIdx]||'medium').trim() : 'medium',
+      cpu, memory: mem,
     };
     try {
       const r = await fetch(`${API}/submit`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payload)});
       const d = await r.json();
-      if (!d.status) { queue.push({job_id:d.job_id, ...payload, cpu:50, mem:50}); added++; }
+      if (!d.status) { queue.push({job_id:d.job_id, ...payload, cpu, mem}); added++; }
     } catch {}
   }
   save(); updateQueueBadge(); renderJobsTables();
