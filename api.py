@@ -516,13 +516,18 @@ def run_scheduler(request: Request):
             rl_q = {}
         explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics, rl_q)
 
+        # Quality score = static score of chosen server (0–1, stable, meaningful for display)
+        # RL reward is the training signal (can go negative due to overload penalty)
+        quality_score = round(scores.get(chosen_dc, 0.5), 4)
+
         scheduled_jobs.append({
             "job_id":          job["job_id"],
             "chosen_dc":       chosen_dc,
             "scores":          scores,
             "score_breakdown": breakdown,
             "rl_q_values":     rl_q,
-            "reward":          round(reward if priority in _rl_agents else scores[chosen_dc], 4),
+            "rl_reward":       round(reward, 4),   # internal RL signal
+            "reward":          quality_score,       # display metric (quality, always 0–1)
             "priority":        priority,
             "latency":         job.get("latency", "N/A"),
             "state":           state,
