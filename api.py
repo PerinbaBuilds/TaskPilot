@@ -168,6 +168,20 @@ def submit_job(job: dict, request: Request):
 # ─────────────────────────────────────────────────────────────────
 # RESET
 # ─────────────────────────────────────────────────────────────────
+@app.post("/submit_batch")
+def submit_batch(jobs: list, request: Request):
+    sid = request.headers.get("X-Session-ID", "default")
+    s = _get_session(sid)
+    ids = []
+    for job in jobs:
+        s["job_id_counter"] += 1
+        job["job_id"] = s["job_id_counter"]
+        s["submitted_ids"].add(job["job_id"])
+        s["job_queue"].append(job)
+        ids.append(job["job_id"])
+    return {"job_ids": ids, "count": len(ids)}
+
+
 @app.post("/reset")
 def reset_state(request: Request):
     global DATA_PTR, STEEL_PTR
