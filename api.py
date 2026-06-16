@@ -459,12 +459,13 @@ def run_scheduler(request: Request):
         scores, metrics, breakdown = compute_scores(state, job["priority"], s["server_loads"])
 
         pool_scores = {dc: sc for dc, sc in scores.items() if breakdown[dc]["in_pool"]}
-        # Least-connections with quality as tiebreaker:
-        # primary sort = fewest jobs assigned, secondary = highest score
-        chosen_dc = min(
-            pool_scores,
-            key=lambda dc: (s["server_loads"].get(dc, 0), -pool_scores[dc])
-        )
+        # Strict round-robin within tier pool — guaranteed even distribution.
+        # Sort pool servers by name for deterministic order, then rotate.
+        pool_servers = sorted(pool_scores.keys())
+        priority = job["priority"]
+        rr_idx = s["rr_index"].get(priority, 0) % len(pool_servers)
+        chosen_dc = pool_servers[rr_idx]
+        s["rr_index"][priority] = rr_idx + 1
 
         s["server_loads"][chosen_dc] = s["server_loads"].get(chosen_dc, 0) + 1
 
