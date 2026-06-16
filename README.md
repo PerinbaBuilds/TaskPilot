@@ -1,4 +1,4 @@
-# 🌱 TaskPilot — Sustainable Cloud Job Scheduler
+# TaskPilot — Sustainable Cloud Job Scheduler
 
 <p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/></a>
@@ -18,177 +18,160 @@
 
 ---
 
-## 🚀 What Is TaskPilot?
+## What Is TaskPilot?
 
 Most cloud schedulers optimise for speed and cost alone. TaskPilot adds a third dimension: **sustainability**.
 
-It routes each compute job to the server that best balances:
+It routes each compute job to the server that best balances performance, cost, and carbon footprint — using a live energy signal and RL agents that continuously learn from scheduling outcomes.
 
-| Metric | Weight (green) | Weight (balanced) | Weight (performance) |
-|--------|:--------------:|:-----------------:|:--------------------:|
-| ⚡ Energy efficiency | 40% | 25% | 10% |
-| 💰 Cost | 25% | 25% | 10% |
-| 🚀 Throughput | 10% | 25% | 40% |
-| ⏱ Latency | 25% | 25% | 40% |
-
-On top of static scoring, **3 RL agents** (one per priority tier) continuously learn from system state and carbon intensity data — blending their policy 25% into every scheduling decision.
+| Metric | Green tier | Balanced tier | Performance tier |
+|--------|:----------:|:-------------:|:----------------:|
+| Energy efficiency | 40% | 25% | 10% |
+| Cost | 25% | 25% | 10% |
+| Throughput | 10% | 25% | 40% |
+| Latency | 25% | 25% | 40% |
 
 ---
 
-## 🏗 Architecture
+## Architecture
 
 ```
-┌──────────────────────────────────────────────────┐
-│                 Browser Dashboard                 │
-│         HTML · CSS · JS · Chart.js 4.4           │
-│    (session-isolated — each user owns their data) │
-└────────────────────┬─────────────────────────────┘
-                     │ HTTP / same-origin
-┌────────────────────▼─────────────────────────────┐
-│              FastAPI  (api.py)                    │
-│                                                   │
-│  ┌──────────────────┐   ┌──────────────────────┐ │
-│  │  3 × RL Agents   │   │  Groq LLM (XAI)      │ │
-│  │  TD-error update │   │  llama-3.3-70b       │ │
-│  └────────┬─────────┘   └──────────────────────┘ │
-│           │                                       │
-│  ┌────────▼──────────────────────────────────┐   │
-│  │       Tier-Pool Scoring Engine            │   │
-│  │  green → bottom third (efficient servers) │   │
-│  │  balanced → middle third                  │   │
-│  │  performance → top third (powerful)       │   │
-│  └────────────────────────────────────────────┘  │
-│                                                   │
-│  ┌────────────────────────────────────────────┐  │
-│  │  Datasets                                  │  │
-│  │  • Steel Industry Energy Dataset  (UCI)    │  │
-│  │  • 9-server synthetic cluster              │  │
-│  │  • 15-min workload traces                  │  │
-│  └────────────────────────────────────────────┘  │
-└──────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────┐
+│                  Browser Dashboard                 │
+│          HTML · CSS · Chart.js 4.4 · JS           │
+│     (session-isolated — every user is independent) │
+└─────────────────────┬─────────────────────────────┘
+                      │ HTTP / same-origin
+┌─────────────────────▼─────────────────────────────┐
+│               FastAPI  (api.py)                    │
+│                                                    │
+│  ┌───────────────────┐  ┌──────────────────────┐  │
+│  │  3 × RL TierAgent │  │  Groq LLM  (XAI)     │  │
+│  │  TD(0) Q-learning │  │  llama-3.3-70b       │  │
+│  └────────┬──────────┘  └──────────────────────┘  │
+│           │                                        │
+│  ┌────────▼───────────────────────────────────┐   │
+│  │         Tier-Pool Scoring Engine           │   │
+│  │  green       → Servers 1-3 (efficient)     │   │
+│  │  balanced    → Servers 4-6 (mid-tier)      │   │
+│  │  performance → Servers 7-9 (powerful)      │   │
+│  └────────────────────────────────────────────┘   │
+│                                                    │
+│  ┌────────────────────────────────────────────┐   │
+│  │  Datasets                                  │   │
+│  │  • Steel Industry Energy Dataset  (UCI)    │   │
+│  │  • 9-server synthetic cluster              │   │
+│  │  • 15-minute workload traces               │   │
+│  └────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ✨ Features
+## Features
 
-- **RL-powered routing** — agents trained at startup on real energy data, blended into every decision
-- **Tier-pool isolation** — green jobs only compete on efficient servers; performance jobs on powerful ones
-- **Explainable AI** — Groq LLM explains every scheduling decision in plain English
-- **Live carbon signal** — real-time carbon intensity from Steel Industry Dataset drives recommendations
-- **Sustainability score** — composite metric tracking green ratio, CO₂ efficiency, and reward
-- **Session isolation** — each browser session has its own independent queue and history
+- **RL-powered routing** — 3 TierAgents (one per priority) trained at startup on real energy data; epsilon-greedy exploration with online TD(0) updates after every job
+- **Tier-pool isolation** — green jobs only compete on efficient servers; performance jobs on the powerful tier
+- **Explainable AI** — Groq LLM (llama-3.3-70b-versatile) explains every scheduling decision in plain English; cached by `(server, priority, carbon_band)` to minimise API calls
+- **Live carbon signal** — carbon intensity blended from the Steel Industry Dataset (UCI) drives real-time recommendations
+- **Sustainability score** — composite KPI tracking green ratio, CO2 efficiency, and agent reward quality
+- **Session isolation** — every browser session has its own independent queue and history via UUID header
 - **Bulk CSV upload** — submit 100s of jobs at once from a CSV file
+- **Reward timeline chart** — 3-dataset smoothed view: raw, 3-job rolling average, 10-job trend
+- **Energy intensity distribution** — 5 descriptive quintile bands (Very Low → Very High) with green-to-red colour gradient
 
 ---
 
-## 🗂 Project Structure
+## Project Structure
 
 ```
 TaskPilot/
-├── api.py                    ← FastAPI entry point (scoring, RL, XAI, serving HTML)
-├── rl/                       ← Reinforcement learning
-│   ├── agents.py             ← Linear function approximation agent
-│   ├── rl_env.py             ← CloudEnv: state/reward simulation
-│   └── train_agents.py       ← Standalone training script
-├── core/                     ← Shared utilities
-│   ├── config.py             ← Priority weight definitions
-│   ├── data_loader.py        ← Dataset loading & normalisation
-│   ├── energy_model.py       ← Server power model (P_idle → P_peak)
-│   ├── job_queue.py          ← In-memory job queue
-│   └── llm_manager.py        ← Fallback explanation generator
+├── api.py                         ← FastAPI entry point (scoring, RL, XAI, HTML serving)
+├── rl/
+│   ├── agents.py                  ← TierAgent: linear Q-learning, TD(0) updates
+│   ├── rl_env.py                  ← CloudEnv: state / reward simulation
+│   └── train_agents.py            ← Standalone offline training script
+├── core/
+│   ├── config.py                  ← Priority weight definitions
+│   ├── data_loader.py             ← Dataset loading & normalisation
+│   ├── energy_model.py            ← Server power model (P_idle → P_peak)
+│   ├── job_queue.py               ← In-memory job queue
+│   └── llm_manager.py             ← Natural-language fallback explanation generator
 ├── frontend/
 │   └── templates/
-│       └── dashboard.html    ← Single-page dashboard (Chart.js, dark theme)
+│       └── dashboard.html         ← Single-page dashboard (Chart.js, dark theme)
 ├── data/
-│   ├── steel_industry_data.csv   ← UCI energy dataset
-│   ├── dataset_rl/               ← Server specs + workload traces
-│   └── demo_jobs.csv             ← Sample jobs for testing ↓
-├── Procfile                  ← Railway deployment
-├── render.yaml               ← Render deployment
-└── requirements.txt
+│   ├── steel_industry_data.csv    ← UCI Steel Industry Energy Dataset
+│   ├── dataset_rl/                ← Server specs (Server_L.xlsx) + task traces
+│   ├── sample_100_jobs.csv        ← 100-job benchmark (priority/cpu/mem/kwh/co2)
+│   └── demo_jobs.csv              ← 10-job quick demo
+├── docker-compose.yml             ← Local Docker setup
+├── Procfile                       ← Heroku / Railway process file
+├── render.yaml                    ← Render deployment config
+├── requirements.txt
+├── Software_Requirements_Specification.md
+└── Software_Design_Document.md
 ```
 
 ---
 
-## 🧪 Try It — Demo Jobs
-
-Upload **`data/demo_jobs.csv`** from the dashboard to test with a pre-built mix of 10 jobs:
-
-```csv
-cpu,memory,priority,latency
-52,16,performance,high
-14,71,balanced,high
-30,46,green,high
-23,23,green,medium
-72,75,balanced,high
-11,59,balanced,low
-79,62,balanced,low
-77,98,green,medium
-75,71,performance,medium
-95,64,green,medium
-```
-
-Hit **▶ Run Scheduler** to see RL-powered routing, server selection, sustainability score and XAI explanations live.
-
----
-
-## 🤖 RL Agent Design
-
-```python
-# State vector fed to each agent
-state = [green_score, system_load, job_size, energy_cost]
-
-# Reward function
-reward = w_green × green − w_cost × cost − w_perf × load
-
-# TD-error weight update (linear function approximation)
-weights += lr × (reward − dot(weights, state)) × state
-
-# Final score blending
-final_score = 0.75 × static_score + 0.25 × RL_score
-```
-
-Three agents train for **300 episodes each at startup** — one per priority tier (green / balanced / performance).
-
----
-
-## 📊 Sustainability Score
-
-```
-score = (avg_reward    × 0.30
-       + green_ratio   × 0.25
-       + carbon_score  × 0.25   ← (1 − avg_carbon_factor)
-       + co2_efficiency× 0.20) × 100
-```
-
----
-
-## ⚙️ Tech Stack
-
-| Component | Technology |
-|-----------|-----------|
-| API | FastAPI + Uvicorn |
-| ML / RL | NumPy (no heavy ML framework) |
-| LLM | Groq API — `llama-3.3-70b-versatile` |
-| Data | Pandas, OpenPyXL |
-| Frontend | Vanilla JS + Chart.js 4.4 |
-| Hosting | Render (free) / Railway |
-
----
-
-## 🏃 Run Locally
+## Run Locally
 
 ```bash
 git clone https://github.com/PerinbaBuilds/TaskPilot.git
 cd TaskPilot
 pip install -r requirements.txt
 
-# Windows
-set GROQ_API_KEY=your_key_here
-# Mac / Linux
-export GROQ_API_KEY=your_key_here
+export GROQ_API_KEY=your_key_here   # Windows: set GROQ_API_KEY=...
 
 uvicorn api:app --host 0.0.0.0 --port 8000
 # Open http://localhost:8000
 ```
+
+### Run with Docker
+
+```bash
+docker compose up --build
+# Open http://localhost:8000
+```
+
+---
+
+## RL Agent Design
+
+```
+State:   [server0_load_norm, server1_load_norm, server2_load_norm,
+          carbon_factor, energy_price, job_cpu, job_mem]   (7 features)
+
+Action:  server index within the tier pool  (0 / 1 / 2)
+
+Reward:  quality_score - overload_penalty
+         quality  = weighted sum of perf / cost / co2 / lat scores
+         overload = max(0, dc_load - avg_pool_load) / 5
+
+Update:  TD(0)  ->  W[action] += lr * (reward + gamma * max_Q_next - Q_now) * features
+```
+
+Three TierAgents pre-train for **500 simulated episodes at startup** with varied loads and strong overload penalties, then keep learning online after every scheduled job.
+
+---
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| API | FastAPI + Uvicorn |
+| ML / RL | NumPy (linear function approximation, no heavy framework) |
+| LLM | Groq API — `llama-3.3-70b-versatile` |
+| Data | Pandas, OpenPyXL |
+| Frontend | Vanilla JS + Chart.js 4.4 |
+| Hosting | Render (free tier) |
+
+---
+
+## Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `GROQ_API_KEY` | Optional | Enables LLM-generated XAI explanations. Falls back to rule-based natural language if absent. |
+| `PORT` | Set by host | Uvicorn listen port (default 8000 locally). |
