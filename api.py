@@ -71,7 +71,10 @@ _co2_min  = STEEL["CO2(tCO2)"].min()
 _co2_rng  = STEEL["CO2(tCO2)"].max() - _co2_min  + 1e-9
 
 STEEL["norm_energy"] = (STEEL["Usage_kWh"] - _ukwh_min) / _ukwh_rng
-STEEL["norm_co2"]    = (STEEL["CO2(tCO2)"] - _co2_min)  / _co2_rng
+# CO2 raw values are ~50% zero — blend rank-based CO2 with NSM (time-of-day)
+# so carbon_factor varies continuously (mirrors real grid carbon intensity patterns)
+_nsm_norm = (STEEL["NSM"] - STEEL["NSM"].min()) / (STEEL["NSM"].max() - STEEL["NSM"].min() + 1e-9)
+STEEL["norm_co2"]    = (0.5 * STEEL["CO2(tCO2)"].rank(pct=True, method="average") + 0.5 * _nsm_norm).round(4)
 
 # ─────────────────────────────────────────────────────────────────
 # SORT SERVERS BY CPU (ascending): index 0 = weakest, -1 = strongest
