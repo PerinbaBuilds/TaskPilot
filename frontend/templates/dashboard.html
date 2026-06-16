@@ -981,10 +981,7 @@ async function runScheduler() {
   text.textContent = 'Running…';
   try {
     if (!queue.length) { toast('No jobs in queue', 'info'); return; }
-    // Submit all queued jobs to the server first
-    for (const job of queue) {
-      await fetch(`${API}/submit`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(job)});
-    }
+    await fetch(`${API}/submit_batch`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(queue)});
     const r = await fetch(`${API}/run`, {method:'POST', headers:apiHeaders()});
     const d = await r.json();
     const jobs = d.scheduled_jobs || [];
