@@ -985,6 +985,7 @@ async function runScheduler() {
     const r = await fetch(`${API}/run`, {method:'POST', headers:apiHeaders()});
     const d = await r.json();
     const jobs = d.scheduled_jobs || [];
+    if (d.server_loads) { localStorage.setItem('tp_server_loads_' + SID, JSON.stringify(d.server_loads)); }
     if (jobs.length) {
       history.push(...jobs);
       queue = [];
@@ -1023,6 +1024,7 @@ async function clearQueue() {
 }
 function clearHistory() {
   history = []; queue = [];
+  localStorage.removeItem('tp_server_loads_' + SID);
   save();
   try { fetch(`${API}/reset`, {method:'POST', headers:apiHeaders()}); } catch {}
   updateQueueBadge(); updateSidebar(); updateNavExport();
@@ -1177,14 +1179,29 @@ function renderOverview() {
     }
   });
 
-  // Doughnut
-  const dcCounts = {};
-  h.forEach(j => dcCounts[j.chosen_dc] = (dcCounts[j.chosen_dc]||0)+1);
+  // Doughnut — show ALL servers (including 0-count) using server_loads from API
+  const storedLoads = JSON.parse(localStorage.getItem('tp_server_loads_' + SID) || 'null');
+  let dcLabels, dcData;
+  if (storedLoads && Object.keys(storedLoads).length > 0) {
+    // Use authoritative server_loads from backend (covers all 9 servers)
+    const sorted = Object.entries(storedLoads).sort((a,b) => {
+      const na = parseInt(a[0].replace('Server ',''));
+      const nb = parseInt(b[0].replace('Server ',''));
+      return na - nb;
+    });
+    dcLabels = sorted.map(e => e[0]);
+    dcData   = sorted.map(e => e[1]);
+  } else {
+    const dcCounts = {};
+    h.forEach(j => dcCounts[j.chosen_dc] = (dcCounts[j.chosen_dc]||0)+1);
+    dcLabels = Object.keys(dcCounts);
+    dcData   = Object.values(dcCounts);
+  }
   destroyChart('chartDoughnut');
   charts.chartDoughnut = new Chart(document.getElementById('chartDoughnut').getContext('2d'), {
     type:'doughnut', data:{
-      labels: Object.keys(dcCounts),
-      datasets:[{data: Object.values(dcCounts),
+      labels: dcLabels,
+      datasets:[{data: dcData,
         backgroundColor:['#00d26a','#4f9cf9','#f0a500','#e74c3c','#a78bfa','#22d3ee','#fb923c','#f472b6','#34d399'],
         borderColor:'#0f1a2a', borderWidth:2,
       }]
