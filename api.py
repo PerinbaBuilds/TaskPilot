@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 import pandas as pd
@@ -176,7 +176,7 @@ def submit_job(job: dict, request: Request):
 # RESET
 # ─────────────────────────────────────────────────────────────────
 @app.post("/submit_batch")
-def submit_batch(jobs: list, request: Request):
+def submit_batch(request: Request, jobs: list = Body(...)):
     sid = request.headers.get("X-Session-ID", "default")
     s = _get_session(sid)
     ids = []
