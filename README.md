@@ -1,6 +1,10 @@
 # 🌱 TaskPilot — Sustainable Cloud Job Scheduler
 
 <p align="center">
+  <img src="assets/logo.svg" width="100" alt="TaskPilot Logo"/>
+</p>
+
+<p align="center">
   <a href="https://www.python.org/"><img src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&logo=python&logoColor=white"/></a>
   <a href="https://fastapi.tiangolo.com/"><img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white"/></a>
   <a href="https://en.wikipedia.org/wiki/Reinforcement_learning"><img src="https://img.shields.io/badge/Reinforcement%20Learning-FF6B35?style=for-the-badge"/></a>
