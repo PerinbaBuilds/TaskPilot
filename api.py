@@ -8,7 +8,7 @@ import random
 import sys
 import uuid
 import numpy as np
-from rl.agents import Agent
+from rl.agents import TierAgent
 from core.config import get_weights as _cfg_weights
 
 app = FastAPI()
@@ -120,27 +120,67 @@ groq_client = Groq(api_key=GROQ_KEY)
 
 
 # ─────────────────────────────────────────────────────────────────
-# RL AGENT INTEGRATION
+# RL TIER AGENTS — one per priority, action = server index in pool
 # ─────────────────────────────────────────────────────────────────
-def _sigmoid(x):
-    return float(1.0 / (1.0 + np.exp(-np.clip(x, -10, 10))))
+_rl_agents: dict[str, TierAgent] = {}
 
-_rl_agents: dict = {}
+def _pool_server_names(priority: str) -> list[str]:
+    """Sorted server names in the tier pool for this priority."""
+    return sorted(f"Server {int(row['ID'])}" for _, row in get_tier_pool(priority).iterrows())
+
+
+def _rl_reward(priority: str, chosen_dc: str, scores: dict,
+               breakdown: dict, server_loads: dict) -> float:
+    """
+    Reward = tier-weighted quality score − overload penalty.
+    Uses PRIORITY_WEIGHTS (perf, cost, co2, lat) which always has 4 values.
+    """
+    w  = PRIORITY_WEIGHTS[priority]   # (perf, cost, co2, lat)
+    bd = breakdown[chosen_dc]
+    quality  = (bd["perf_score"] * w[0] + bd["cost_score"] * w[1]
+              + bd["co2_score"]  * w[2] + bd["lat_score"]  * w[3])
+    pool_dcs = [dc for dc, b in breakdown.items() if b["in_pool"]]
+    avg_load = sum(server_loads.get(dc, 0) for dc in pool_dcs) / max(len(pool_dcs), 1)
+    overload = max(0.0, server_loads.get(chosen_dc, 0) - avg_load) / 5.0
+    return float(quality - overload)
 
 def _init_rl_agents():
+    """Pre-train one TierAgent per priority for 500 simulated episodes."""
     try:
         from rl.rl_env import CloudEnv
         env = CloudEnv(os.path.join(BASE, "data", "steel_industry_data.csv"))
+
         for priority in ["green", "balanced", "performance"]:
-            agent = Agent(priority, lr=0.05)
-            wts = _cfg_weights(priority)
-            for _ in range(300):
-                state = env.reset()
-                # reward = green_benefit - cost_penalty - load_penalty
-                reward = float(wts[0]*state[0] - wts[2]*state[3] - wts[1]*state[1])
-                agent.learn(state, reward)
+            pool   = _pool_server_names(priority)
+            agent  = TierAgent(priority, n_servers=len(pool), lr=0.05, epsilon=0.3)
+            wts    = _cfg_weights(priority)
+            # Simulate load distributions during pre-training
+            for ep in range(500):
+                raw_state = env.reset()
+                # Simulate varied server loads
+                sim_loads = [float(np.random.randint(0, 20)) for _ in pool]
+                feat      = agent.build_features(
+                    sim_loads,
+                    raw_state[2] if len(raw_state) > 2 else 0.5,  # carbon proxy
+                    raw_state[3] if len(raw_state) > 3 else 0.05,  # price proxy
+                    float(np.random.rand()),
+                    float(np.random.rand()),
+                )
+                action  = agent.act(feat, explore=True)
+                # Reward: green agent should prefer low-load, low-carbon;
+                #         perf agent should prefer low-load, high-throughput
+                # Reward: quality benefit minus STRONG overload penalty
+                # Training emphasises avoiding overloaded servers so agent
+                # learns load-aware distribution, not just quality chasing.
+                avg_load     = sum(sim_loads) / max(len(sim_loads), 1)
+                overload     = max(0.0, sim_loads[action] - avg_load) / 10.0
+                quality_sim  = (wts[0] * float(np.random.rand())
+                              + (wts[2] if len(wts) > 2 else 0.2) * (1.0 - (raw_state[2] if len(raw_state) > 2 else 0.5)))
+                reward       = quality_sim - 0.8 * overload  # strong penalty
+                agent.learn(feat, action, reward)
             _rl_agents[priority] = agent
-        print(f"RL agents trained for {list(_rl_agents.keys())}")
+
+        print(f"RL TierAgents trained: {list(_rl_agents.keys())}")
     except Exception as e:
         print(f"RL agent training skipped: {e}")
 
@@ -290,29 +330,15 @@ def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict
 
     scores, metrics, score_breakdown = {}, {}, {}
 
-    # ── LEAST-CONNECTIONS within tier pool ─────────────────────────
-    # Each server in the pool gets a load score inversely proportional
-    # to how many jobs it already holds. Servers with equal load score
-    # equally so quality score acts as tiebreaker.
-    pool_dcs   = [server_ids[i] for i in pool_positions]
-    pool_loads = [server_loads.get(dc, 0) for dc in pool_dcs]
-    min_load   = min(pool_loads) if pool_loads else 0
-
     for i, dc in enumerate(server_ids):
         in_pool = (SERVERS.index[i] in pool_pos)
 
         if in_pool:
             ps, cs, gs, ls = pool_norm[dc]
-            quality = ps * w[0] + cs * w[1] + gs * w[2] + ls * w[3]
-            jobs_on_dc = server_loads.get(dc, 0)
-            # LC score: 1.0 if at minimum load, 0.0 if overloaded by ≥10 jobs above min
-            lc = max(0.0, 1.0 - (jobs_on_dc - min_load) / 10.0)
-            # Final: LC dominates (80%) to guarantee spread; quality breaks ties (20%)
-            score = round(min(max(0.80 * lc + 0.20 * quality, 0.0), 1.0), 4)
-            lc_val = round(lc, 4)
+            # Pure quality score — RL agent uses this via _rl_reward, not blended in here
+            score = round(min(max(ps * w[0] + cs * w[1] + gs * w[2] + ls * w[3], 0.0), 1.0), 4)
         else:
-            ps = cs = gs = ls = quality = lc_val = 0.0
-            score = 0.0
+            ps = cs = gs = ls = score = 0.0
 
         scores[dc]  = score
         metrics[dc] = {
@@ -326,34 +352,11 @@ def compute_scores(state: dict, priority: str, server_loads: dict) -> tuple[dict
             "cost_score":     round(cs, 4),
             "co2_score":      round(gs, 4),
             "lat_score":      round(ls, 4),
-            "lc_score":       lc_val,
             "capacity_score": round(SERVERS.iloc[i]["capacity_tier"], 4),
             "final":          round(score, 4),
             "in_pool":        in_pool,
+            "server_load":    server_loads.get(dc, 0),
         }
-
-    # ── RL SIGNAL as quality nudge (doesn't override LC distribution) ──
-    if _rl_agents and priority in _rl_agents:
-        state_vec = np.array([
-            1.0 - state['carbon_factor'],
-            state['load'],
-            0.5,
-            state['energy_price'],
-        ], dtype=np.float32)
-        rl_raw   = _rl_agents[priority].act(state_vec)
-        rl_score = _sigmoid(rl_raw)
-        for i, dc in enumerate(server_ids):
-            if score_breakdown[dc]['in_pool']:
-                # Blend RL only into the quality portion (20%), not the LC portion
-                blended = round(min(max(scores[dc] + 0.05 * rl_score, 0.0), 1.0), 4)
-                scores[dc] = blended
-                score_breakdown[dc]['final']    = blended
-                score_breakdown[dc]['rl_score'] = round(rl_score, 4)
-            else:
-                score_breakdown[dc]['rl_score'] = 0.0
-    else:
-        for dc in server_ids:
-            score_breakdown[dc]['rl_score'] = 0.0
 
     return scores, metrics, score_breakdown
 
@@ -453,31 +456,56 @@ def run_scheduler(request: Request):
         s["rr_index"] = {"green": 0, "balanced": 0, "performance": 0}
 
     scheduled_jobs = []
-    while s["job_queue"]:
-        job   = s["job_queue"].pop(0)
-        state = compute_state()
-        scores, metrics, breakdown = compute_scores(state, job["priority"], s["server_loads"])
+    prev_feat: dict = {}  # last feature vector per priority for TD(next_state)
 
-        pool_scores = {dc: sc for dc, sc in scores.items() if breakdown[dc]["in_pool"]}
-        # Strict round-robin within tier pool — guaranteed even distribution.
-        # Sort pool servers by name for deterministic order, then rotate.
-        pool_servers = sorted(pool_scores.keys())
+    while s["job_queue"]:
+        job      = s["job_queue"].pop(0)
         priority = job["priority"]
-        rr_idx = s["rr_index"].get(priority, 0) % len(pool_servers)
-        chosen_dc = pool_servers[rr_idx]
-        s["rr_index"][priority] = rr_idx + 1
+        state    = compute_state()
+        scores, metrics, breakdown = compute_scores(state, priority, s["server_loads"])
+
+        pool_servers = sorted(dc for dc, b in breakdown.items() if b["in_pool"])
+
+        # ── RL AGENT PICKS THE SERVER ─────────────────────────────
+        if priority in _rl_agents:
+            agent = _rl_agents[priority]
+            pool_loads = [float(s["server_loads"].get(dc, 0)) for dc in pool_servers]
+            feat = agent.build_features(
+                pool_loads,
+                state["carbon_factor"],
+                state["energy_price"],
+                job.get("cpu", 50) / 100.0,
+                job.get("memory", 50) / 100.0,
+            )
+            # Explore during runtime so agent keeps learning
+            action    = agent.act(feat, explore=True)
+            chosen_dc = pool_servers[action]
+
+            # Compute reward: quality score of chosen server − overload penalty
+            reward = _rl_reward(priority, chosen_dc, scores, breakdown, s["server_loads"])
+
+            # TD update: use previous feature as "last state" for this tier
+            next_feat_prev = prev_feat.get(priority)
+            agent.learn(feat, action, reward, next_feat=next_feat_prev)
+            prev_feat[priority] = feat
+        else:
+            # Fallback: pick highest quality score
+            chosen_dc = max({dc: scores[dc] for dc in pool_servers}, key=lambda dc: scores[dc])
 
         s["server_loads"][chosen_dc] = s["server_loads"].get(chosen_dc, 0) + 1
 
         explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics)
+        rl_q = {pool_servers[i]: float(np.round(_rl_agents[priority].q_values(feat)[i], 4))
+                for i in range(len(pool_servers))} if priority in _rl_agents else {}
 
         scheduled_jobs.append({
             "job_id":          job["job_id"],
             "chosen_dc":       chosen_dc,
             "scores":          scores,
             "score_breakdown": breakdown,
-            "reward":          scores[chosen_dc],
-            "priority":        job["priority"],
+            "rl_q_values":     rl_q,
+            "reward":          round(reward if priority in _rl_agents else scores[chosen_dc], 4),
+            "priority":        priority,
             "latency":         job.get("latency", "N/A"),
             "state":           state,
             "power_kwh":       metrics[chosen_dc]["energy_kwh"],
