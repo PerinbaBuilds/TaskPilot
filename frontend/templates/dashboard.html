@@ -1263,39 +1263,25 @@ async function uploadCSV(input) {
     });
   }
 
-  setUploadProgress(55, `Sending ${payloads.length} jobs to scheduler…`);
-  if (txt) txt.innerHTML = `<strong style="color:var(--blue)">Uploading ${payloads.length} jobs…</strong>`;
-  await new Promise(r => setTimeout(r, 80));
+  setUploadProgress(55, `Registering ${payloads.length} jobs in queue…`);
+  if (txt) txt.innerHTML = `<strong style="color:var(--blue)">Loading ${payloads.length} jobs…</strong>`;
+  await new Promise(r => setTimeout(r, 120));
 
-  try {
-    const r = await fetch(`${API}/submit_batch`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payloads)});
-    const d = await r.json();
-    const ids = d.job_ids || [];
+  // Add to local queue only — runScheduler will batch-submit when user hits Run
+  let counter = queue.length ? Math.max(...queue.map(j => j.job_id || 0)) : 0;
+  payloads.forEach(p => {
+    counter++;
+    queue.push({job_id: counter, ...p, mem: p.memory});
+  });
 
-    setUploadProgress(85, 'Registering jobs in queue…');
-    await new Promise(r => setTimeout(r, 120));
+  setUploadProgress(100, `✓ ${payloads.length} jobs ready`);
+  if (icon) icon.innerHTML = '<i class="fa fa-check-circle" style="color:var(--green)"></i>';
+  if (txt)  txt.innerHTML  = `<strong style="color:var(--green)">${payloads.length} jobs loaded — hit Run Scheduler</strong>`;
 
-    ids.forEach((id, idx) => {
-      const p = payloads[idx];
-      if (p) queue.push({job_id: id, ...p, mem: p.memory});
-    });
+  save(); updateQueueBadge(); renderJobsTables();
+  toast(`${payloads.length} jobs added — ready to schedule`, 'success');
 
-    setUploadProgress(100, `✓ ${ids.length} jobs ready`);
-    if (icon) icon.innerHTML = '<i class="fa fa-check-circle" style="color:var(--green)"></i>';
-    if (txt)  txt.innerHTML  = `<strong style="color:var(--green)">${ids.length} jobs loaded — hit Run Scheduler</strong>`;
-
-    save(); updateQueueBadge(); renderJobsTables();
-    toast(`${ids.length} jobs added — ready to schedule`, 'success');
-
-    setTimeout(() => {
-      setUploadProgress(null);
-      resetUploadArea();
-    }, 2500);
-  } catch(e) {
-    toast('Upload failed — is the API running?', 'error');
-    setUploadProgress(null);
-    resetUploadArea();
-  }
+  setTimeout(() => { setUploadProgress(null); resetUploadArea(); }, 2500);
   input.value = '';
 }
 
