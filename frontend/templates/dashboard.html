@@ -857,13 +857,19 @@ body {
 
   <div class="mb-4">
     <label class="form-label">Bulk CSV Upload</label>
-    <div class="upload-area" onclick="document.getElementById('csvInput').click()">
-      <div class="upload-icon"><i class="fa fa-file-csv"></i></div>
-      <div class="upload-text">Click to upload jobs.csv<br><small>Columns: priority, latency, cpu, memory</small></div>
+    <div class="upload-area" id="uploadArea" onclick="document.getElementById('csvInput').click()">
+      <div class="upload-icon" id="uploadIcon"><i class="fa fa-file-csv"></i></div>
+      <div class="upload-text" id="uploadText">Click to upload jobs.csv<br><small>Columns: priority, latency, cpu, memory</small></div>
       <input type="file" id="csvInput" accept=".csv" onchange="uploadCSV(this)">
-      <div class="upload-progress-wrap" style="display:none;padding:0 4px 4px">
-        <div class="upload-progress-bar"><div class="upload-progress-fill"></div></div>
-        <div class="upload-progress-label" style="font-size:0.72rem;color:var(--muted);margin-top:4px;text-align:right"></div>
+    </div>
+    <!-- Upload progress — separate from upload-area so clicks don't re-open file dialog -->
+    <div id="uploadProgress" style="display:none;margin-top:10px;padding:12px 14px;background:rgba(79,156,249,0.08);border:1px solid rgba(79,156,249,0.25);border-radius:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <span style="font-size:0.8rem;font-weight:600;color:var(--blue)" id="uploadProgressLabel">Parsing CSV…</span>
+        <span style="font-size:0.75rem;color:var(--muted)" id="uploadProgressPct">0%</span>
+      </div>
+      <div style="height:4px;background:rgba(255,255,255,0.06);border-radius:99px;overflow:hidden;">
+        <div id="uploadProgressFill" style="height:100%;background:linear-gradient(90deg,#4f9cf9,#00d26a);border-radius:99px;transition:width 0.3s ease;width:0%"></div>
       </div>
     </div>
     <div style="margin-top:8px;padding:8px 10px;background:rgba(0,210,106,0.06);border:1px solid rgba(0,210,106,0.15);border-radius:6px;font-size:0.72rem;color:var(--muted);line-height:1.6">
@@ -1197,14 +1203,34 @@ function confirmReset() {
 }
 
 // ── CSV UPLOAD ─────────────────────────────────────────────────────
+function setUploadProgress(pct, label) {
+  const wrap  = document.getElementById('uploadProgress');
+  const fill  = document.getElementById('uploadProgressFill');
+  const lbl   = document.getElementById('uploadProgressLabel');
+  const pctEl = document.getElementById('uploadProgressPct');
+  if (!wrap) return;
+  wrap.style.display = pct === null ? 'none' : 'block';
+  if (pct !== null) {
+    fill.style.width   = pct + '%';
+    pctEl.textContent  = Math.round(pct) + '%';
+    lbl.textContent    = label || '';
+  }
+}
+
 async function uploadCSV(input) {
   const file = input.files[0];
   if (!file) return;
-  const uploadArea = input.closest('.upload-area') || input.parentElement;
-  const progWrap = uploadArea.querySelector('.upload-progress-wrap');
-  const progFill = uploadArea.querySelector('.upload-progress-fill');
-  const progLabel = uploadArea.querySelector('.upload-progress-label');
-  if (progWrap) progWrap.style.display = 'block';
+
+  // Show upload area visual feedback
+  const area = document.getElementById('uploadArea');
+  const icon = document.getElementById('uploadIcon');
+  const txt  = document.getElementById('uploadText');
+  if (area) area.style.borderColor = 'var(--blue)';
+  if (icon) icon.innerHTML = '<i class="fa fa-spinner fa-spin" style="color:var(--blue)"></i>';
+  if (txt)  txt.innerHTML  = `<strong style="color:var(--blue)">Reading ${file.name}…</strong>`;
+
+  setUploadProgress(10, 'Reading file…');
+  await new Promise(r => setTimeout(r, 80)); // let browser paint
 
   const text = await file.text();
   const lines = text.trim().split('\n').filter(l => l.trim());
@@ -1213,9 +1239,18 @@ async function uploadCSV(input) {
   const lIdx   = headers.indexOf('latency');
   const cpuIdx = headers.indexOf('cpu');
   const memIdx = headers.indexOf('memory');
-  if (pIdx === -1) { toast('CSV must have a "priority" column', 'error'); input.value=''; return; }
 
-  // Parse all rows locally first (instant)
+  if (pIdx === -1) {
+    toast('CSV must have a "priority" column', 'error');
+    setUploadProgress(null);
+    resetUploadArea();
+    input.value = '';
+    return;
+  }
+
+  setUploadProgress(30, `Parsing ${lines.length - 1} rows…`);
+  await new Promise(r => setTimeout(r, 80));
+
   const payloads = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = lines[i].split(',');
@@ -1228,28 +1263,49 @@ async function uploadCSV(input) {
     });
   }
 
-  if (progFill) progFill.style.width = '40%';
-  if (progLabel) progLabel.textContent = `Uploading ${payloads.length} jobs…`;
+  setUploadProgress(55, `Sending ${payloads.length} jobs to scheduler…`);
+  if (txt) txt.innerHTML = `<strong style="color:var(--blue)">Uploading ${payloads.length} jobs…</strong>`;
+  await new Promise(r => setTimeout(r, 80));
 
-  // Single batch call instead of N individual fetches
   try {
     const r = await fetch(`${API}/submit_batch`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(payloads)});
     const d = await r.json();
     const ids = d.job_ids || [];
+
+    setUploadProgress(85, 'Registering jobs in queue…');
+    await new Promise(r => setTimeout(r, 120));
+
     ids.forEach((id, idx) => {
       const p = payloads[idx];
       if (p) queue.push({job_id: id, ...p, mem: p.memory});
     });
-    if (progFill) progFill.style.width = '100%';
-    if (progLabel) progLabel.textContent = `✓ ${ids.length} jobs loaded`;
-    setTimeout(() => { if (progWrap) progWrap.style.display='none'; }, 2000);
+
+    setUploadProgress(100, `✓ ${ids.length} jobs ready`);
+    if (icon) icon.innerHTML = '<i class="fa fa-check-circle" style="color:var(--green)"></i>';
+    if (txt)  txt.innerHTML  = `<strong style="color:var(--green)">${ids.length} jobs loaded — hit Run Scheduler</strong>`;
+
     save(); updateQueueBadge(); renderJobsTables();
-    toast(`Added ${ids.length} jobs from CSV — hit Run Scheduler`, 'success');
+    toast(`${ids.length} jobs added — ready to schedule`, 'success');
+
+    setTimeout(() => {
+      setUploadProgress(null);
+      resetUploadArea();
+    }, 2500);
   } catch(e) {
     toast('Upload failed — is the API running?', 'error');
-    if (progWrap) progWrap.style.display = 'none';
+    setUploadProgress(null);
+    resetUploadArea();
   }
   input.value = '';
+}
+
+function resetUploadArea() {
+  const area = document.getElementById('uploadArea');
+  const icon = document.getElementById('uploadIcon');
+  const txt  = document.getElementById('uploadText');
+  if (area) area.style.borderColor = '';
+  if (icon) icon.innerHTML = '<i class="fa fa-file-csv"></i>';
+  if (txt)  txt.innerHTML  = 'Click to upload jobs.csv<br><small>Columns: priority, latency, cpu, memory</small>';
 }
 
 // ── EXPORT ─────────────────────────────────────────────────────────
