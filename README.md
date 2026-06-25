@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <b>Route cloud workloads intelligently — minimising carbon emissions using real-time energy data, RL agents, and LLM-powered explainability.</b>
+  <b>Route cloud workloads intelligently — minimising carbon emissions using real-time energy data, RL agents, and LLM-powered explainability</b>
 </p>
 
 <p align="center">
