@@ -411,12 +411,90 @@ body {
 .upload-progress-bar { height: 3px; background: rgba(255,255,255,0.06); border-radius:99px; overflow:hidden; }
 .upload-progress-fill { height:100%; background: var(--green); border-radius:99px; transition: width 0.2s ease; width:0%; }
 .upload-progress-label { font-size:0.72rem; color:var(--muted); margin-top:4px; }
+/* ── MOBILE MENU TOGGLE (hidden on desktop) ── */
+.sb-toggle {
+  display: none; background: transparent; border: 1px solid var(--border);
+  color: var(--text); border-radius: 8px; width: 38px; height: 38px;
+  font-size: 1rem; cursor: pointer; flex-shrink: 0; align-items: center; justify-content: center;
+}
+.sb-toggle:hover { border-color: var(--green); color: var(--green); }
+.sb-backdrop {
+  display: none; position: fixed; inset: 0; top: var(--nav);
+  background: rgba(0,0,0,0.55); z-index: 1250; backdrop-filter: blur(2px);
+}
+.sb-backdrop.open { display: block; }
+
+/* ══════════════ RESPONSIVE — TABLET ══════════════ */
+@media (max-width: 1100px) {
+  .carbon-pill { display: none; }
+}
+
+/* ══════════════ RESPONSIVE — MOBILE ══════════════ */
+@media (max-width: 900px) {
+  :root { --sidebar: 250px; }
+
+  /* Navbar becomes compact */
+  .gm-nav { padding: 0 12px; gap: 8px; }
+  .sb-toggle { display: flex; }
+  .gm-nav .brand {
+    position: static; width: auto; height: auto;
+    border-right: none; background: transparent; padding: 0;
+    font-size: 1rem;
+  }
+  .gm-nav .brand svg { width: 24px; height: 24px; }
+  .queue-info { display: none; }
+  .btn-add .btxt, .btn-reset .btxt { display: none; }
+  .btn-add, .btn-reset { padding: 8px 11px; }
+  .btn-run { padding: 8px 14px; font-size: 0.8rem; }
+
+  /* Sidebar → slide-in drawer */
+  .sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+    z-index: 1300; box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .sidebar.open { transform: translateX(0); }
+
+  /* Main content spans full width */
+  .main { margin-left: 0; }
+  .main-inner { padding: 16px 12px; }
+
+  /* Stack every row into a single readable column */
+  .row { flex-direction: column; gap: 12px; margin-bottom: 12px; }
+  .col, .col-2, .col-3 { flex: 1 1 auto; width: 100%; min-width: 0; }
+
+  /* KPI cards render 2-up so they aren't a long tower */
+  .kpi-row { flex-direction: row; flex-wrap: wrap; }
+  .kpi-row > .col { flex: 1 1 calc(50% - 6px); width: calc(50% - 6px); min-width: 0; }
+  .kpi { padding: 14px 14px; }
+  .kpi-value { font-size: 1.5rem; }
+  .kpi-icon { font-size: 1.3rem; top: 12px; right: 12px; }
+
+  /* Tab bar scrolls horizontally, labels stay readable */
+  .tab-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .tab-bar::-webkit-scrollbar { height: 0; }
+  .tab-btn { flex: 0 0 auto; padding: 9px 14px; }
+
+  /* Reward-chart infographic zones stack vertically */
+  .kpi-zones { flex-direction: column !important; }
+
+  /* Slide-in job form + panels go full width */
+  .job-panel { width: 100%; right: -100%; }
+}
+
+@media (max-width: 480px) {
+  .kpi-row > .col { flex: 1 1 100%; width: 100%; }
+  .main-inner { padding: 12px 10px; }
+  .btn-run .btxt-run { display: none; }
+  .btn-run { padding: 8px 12px; }
+}
 </style>
 </head>
 <body>
 
 <!-- ════════════════ NAVBAR ════════════════ -->
 <nav class="gm-nav">
+  <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()" aria-label="Menu"><i class="fa fa-bars"></i></button>
   <a href="#" class="brand" onclick="showTab('overview');return false;">
     <svg width="28" height="28" viewBox="0 0 32 32" style="vertical-align:middle;margin-right:6px"><rect width="32" height="32" rx="8" fill="#060b11"/><path d="M16 6 C10 6 6 11 6 16 C6 20 9 23 13 24 C13 24 12 28 16 28 C20 28 19 24 19 24 C23 23 26 20 26 16 C26 11 22 6 16 6Z" fill="#00d26a"/><line x1="16" y1="28" x2="16" y2="16" stroke="#060b11" stroke-width="1.5"/></svg>
     TaskPilot
@@ -433,21 +511,21 @@ body {
 
   <div class="nav-spacer"></div>
 
-  <button class="btn-add" onclick="openPanel()"><i class="fa fa-plus"></i> New Job</button>
+  <button class="btn-add" onclick="openPanel()"><i class="fa fa-plus"></i> <span class="btxt">New Job</span></button>
   <button class="btn-run" id="btnRun" onclick="runScheduler()" disabled>
     <span id="btnRunIcon"><i class="fa fa-play"></i></span>
-    <span id="btnRunText">Run Scheduler</span>
+    <span id="btnRunText" class="btxt-run">Run Scheduler</span>
   </button>
   <button class="btn-export" id="btnExport" onclick="exportCSV()" disabled title="Export results">
     <i class="fa fa-download"></i>
   </button>
   <button class="btn-reset" onclick="confirmReset()" title="Reset all data">
-    <i class="fa fa-rotate-left"></i> Reset
+    <i class="fa fa-rotate-left"></i> <span class="btxt">Reset</span>
   </button>
 </nav>
 
 <!-- ════════════════ SIDEBAR ════════════════ -->
-<aside class="sidebar">
+<aside class="sidebar" id="sidebar">
   <div>
     <div class="sb-label">Live Stats</div>
     <div class="sb-stat"><span class="sb-stat-label">Total Jobs</span><span class="sb-stat-val text-green" id="sbTotal">0</span></div>
@@ -470,6 +548,7 @@ body {
     <div id="sbCarbonRec" style="font-size:0.78rem;color:var(--muted);line-height:1.6">—</div>
   </div>
 </aside>
+<div class="sb-backdrop" id="sbBackdrop" onclick="toggleSidebar(false)"></div>
 
 <!-- ════════════════ MAIN ════════════════ -->
 <main class="main">
@@ -487,7 +566,7 @@ body {
   <!-- ═══ OVERVIEW ═══ -->
   <div class="section active" id="tab-overview">
     <!-- KPIs -->
-    <div class="row mb-4">
+    <div class="row mb-4 kpi-row">
       <div class="col">
         <div class="kpi kpi-g">
           <div class="kpi-icon"><i class="fa fa-star"></i></div>
@@ -555,7 +634,7 @@ body {
                 <span>Raw per-job score</span>
               </div>
             </div>
-            <div style="display:flex;gap:8px;margin-top:8px">
+            <div class="kpi-zones" style="display:flex;gap:8px;margin-top:8px">
               <div style="flex:1;padding:5px 8px;background:rgba(0,210,106,0.08);border-left:2px solid #00d26a;border-radius:4px;font-size:0.7rem">
                 <span style="color:var(--green);font-weight:600">≥ 0.6</span> <span style="color:var(--muted)">Excellent — RL picked optimal server</span>
               </div>
@@ -1037,6 +1116,15 @@ function toast(msg, type='success') {
   el.innerHTML = `<i class="fa fa-${ic}"></i> ${msg}`;
   document.getElementById('toast-container').appendChild(el);
   setTimeout(() => el.remove(), 4000);
+}
+
+// ── MOBILE SIDEBAR DRAWER ────────────────────────────────────────
+function toggleSidebar(force) {
+  const sb = document.getElementById('sidebar');
+  const bd = document.getElementById('sbBackdrop');
+  const open = (force === undefined) ? !sb.classList.contains('open') : force;
+  sb.classList.toggle('open', open);
+  bd.classList.toggle('open', open);
 }
 
 // ── TABS ─────────────────────────────────────────────────────────
