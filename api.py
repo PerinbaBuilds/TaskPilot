@@ -611,6 +611,6 @@ _DASHBOARD = os.path.join(BASE, "frontend", "templates", "dashboard.html")
 def root():
     return HTMLResponse(open(_DASHBOARD, encoding="utf-8").read())
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
-    return {"message": "TaskPilot API — tier-pool routing active"}
+    return {"status": "ok"}
