@@ -1782,12 +1782,34 @@ function renderXAITab() {
   renderXAI();
 }
 
+async function fetchLLMExplanation(job, explEl) {
+  const baseText = job.explanation || '';
+  explEl.innerHTML = `${baseText} <span style="color:var(--muted);font-size:0.78rem;white-space:nowrap"><i class="fa fa-spinner fa-spin"></i> refining with AI…</span>`;
+  try {
+    const r = await fetch(`${API}/explain`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(job)});
+    const d = await r.json();
+    job.llm_loaded = true;
+    if (d.explanation) { job.explanation = d.explanation; }
+    save();
+    // Only touch the DOM if this job is still the one on screen
+    if (parseInt(document.getElementById('xaiSelect').value) === job.job_id)
+      explEl.textContent = job.explanation || baseText;
+  } catch(e) {
+    job.llm_loaded = true;
+    if (parseInt(document.getElementById('xaiSelect').value) === job.job_id)
+      explEl.textContent = baseText;   // keep instant rule-based text on failure
+  }
+}
+
 function renderXAI() {
   const id  = parseInt(document.getElementById('xaiSelect').value);
   const job = history.find(j => j.job_id === id);
   if (!job) return;
 
-  document.getElementById('xaiExplanation').textContent = job.explanation || 'No explanation available.';
+  const explEl = document.getElementById('xaiExplanation');
+  explEl.textContent = job.explanation || 'No explanation available.';
+  // Fetch the richer LLM explanation lazily, once per job (keeps scheduling fast)
+  if (!job.llm_loaded) fetchLLMExplanation(job, explEl);
 
   const bd = job.score_breakdown || {};
   const inPool  = Object.entries(bd).filter(([,v])=>v.in_pool);

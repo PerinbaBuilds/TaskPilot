@@ -119,7 +119,7 @@ PRIORITY_WEIGHTS = {
 # GROQ CLIENT
 # ─────────────────────────────────────────────────────────────────
 GROQ_KEY    = os.getenv("GROQ_API_KEY", "")
-groq_client = Groq(api_key=GROQ_KEY)
+groq_client = Groq(api_key=GROQ_KEY, max_retries=0)
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -375,18 +375,52 @@ def _xai_key(chosen_dc: str, priority: str, carbon_factor: float) -> str:
     band = "low" if carbon_factor < 0.33 else "high" if carbon_factor > 0.66 else "med"
     return f"{chosen_dc}|{priority}|{band}"
 
-def generate_explanation(job, state, chosen_dc, scores, breakdown, metrics,
-                         rl_q: dict | None = None) -> str:
-    priority   = job["priority"]
-    cache_key  = _xai_key(chosen_dc, priority, state["carbon_factor"])
-    if cache_key in _xai_cache:
-        return _xai_cache[cache_key]
+def _rule_explanation(job, state, chosen_dc, breakdown, priority, w, pool_names) -> str:
+    """Fast, deterministic natural-language explanation (no network calls)."""
+    bd = breakdown[chosen_dc]
+    pool_rivals = sorted(
+        [(k, v["final"]) for k, v in breakdown.items() if k != chosen_dc and v["in_pool"]],
+        key=lambda x: x[1], reverse=True,
+    )
+    tier_desc = {"green": "energy-efficient", "balanced": "mid-tier", "performance": "high-throughput"}[priority]
+    dominant  = max(
+        [("CO₂ efficiency", bd["co2_score"]), ("cost efficiency", bd["cost_score"]),
+         ("throughput", bd["perf_score"]), ("low latency", bd["lat_score"])],
+        key=lambda x: x[1]
+    )[0]
+    carbon_desc = "low" if state["carbon_factor"] < 0.33 else "high" if state["carbon_factor"] > 0.66 else "moderate"
+    rival_txt   = f" outperforming {pool_rivals[0][0]} (score {pool_rivals[0][1]:.3f})" if pool_rivals else ""
+    return (
+        f"{chosen_dc} was chosen by the RL agent from the {priority} tier pool "
+        f"({', '.join(pool_names)}), which contains {tier_desc} servers. "
+        f"With {carbon_desc} grid carbon intensity and system load at {state['load']:.0%}, "
+        f"the agent prioritised {dominant} — scoring {bd['final']:.3f}{rival_txt}. "
+        f"The {priority} weighting profile (perf×{w[0]}, cost×{w[1]}, CO₂×{w[2]}, lat×{w[3]}) "
+        f"guided this decision while balancing current server loads across the tier."
+    )
 
+
+def generate_explanation(job, state, chosen_dc, scores, breakdown, metrics,
+                         rl_q: dict | None = None, use_llm: bool = True) -> str:
+    priority   = job["priority"]
     w          = PRIORITY_WEIGHTS[priority]
     pool_names = [
         f"Server {int(row['ID'])}"
         for _, row in get_tier_pool(priority).iterrows()
     ]
+
+    # Instant rule-based explanation — always available, never blocks.
+    rule = _rule_explanation(job, state, chosen_dc, breakdown, priority, w, pool_names)
+
+    # During batch scheduling (use_llm=False) or without a key, skip the network
+    # entirely so /run stays fast. The richer LLM text is fetched lazily via /explain.
+    if not use_llm or not GROQ_KEY:
+        return rule
+
+    cache_key = _xai_key(chosen_dc, priority, state["carbon_factor"])
+    if cache_key in _xai_cache:
+        return _xai_cache[cache_key]
+
     cm = metrics[chosen_dc]
 
     bd_text = "\n".join(
@@ -425,34 +459,11 @@ mention tier routing, dominant metric, and grid carbon conditions. Do not greet 
             messages=[{"role": "user", "content": prompt}],
             max_tokens=200,
             temperature=0.4,
-            timeout=10,
+            timeout=8,
         )
-        result = resp.choices[0].message.content.strip()
+        result = resp.choices[0].message.content.strip() or rule
     except Exception:
-        # Natural-language fallback using RL Q-values and quality scores
-        bd   = breakdown[chosen_dc]
-        pool_rivals = sorted(
-            [(k, v["final"]) for k, v in breakdown.items() if k != chosen_dc and v["in_pool"]],
-            key=lambda x: x[1], reverse=True,
-        )
-
-        tier_desc = {"green": "energy-efficient", "balanced": "mid-tier", "performance": "high-throughput"}[priority]
-        dominant  = max(
-            [("CO₂ efficiency", bd["co2_score"]), ("cost efficiency", bd["cost_score"]),
-             ("throughput", bd["perf_score"]), ("low latency", bd["lat_score"])],
-            key=lambda x: x[1]
-        )[0]
-        carbon_desc = "low" if state["carbon_factor"] < 0.33 else "high" if state["carbon_factor"] > 0.66 else "moderate"
-        rival_txt   = f" outperforming {pool_rivals[0][0]} (score {pool_rivals[0][1]:.3f})" if pool_rivals else ""
-
-        result = (
-            f"{chosen_dc} was chosen by the RL agent from the {priority} tier pool "
-            f"({', '.join(pool_names)}), which contains {tier_desc} servers. "
-            f"With {carbon_desc} grid carbon intensity and system load at {state['load']:.0%}, "
-            f"the agent prioritised {dominant} — scoring {bd['final']:.3f}{rival_txt}. "
-            f"The {priority} weighting profile (perf×{w[0]}, cost×{w[1]}, CO₂×{w[2]}, lat×{w[3]}) "
-            f"guided this decision while balancing current server loads across the tier."
-        )
+        result = rule   # network/LLM failure → keep the instant rule-based text
 
     _xai_cache[cache_key] = result
     return result
@@ -517,7 +528,10 @@ def run_scheduler(request: Request):
                     for i in range(len(pool_servers))}
         else:
             rl_q = {}
-        explanation = generate_explanation(job, state, chosen_dc, scores, breakdown, metrics, rl_q)
+        # Fast rule-based explanation during the batch — the richer LLM version
+        # is fetched lazily per job via /explain so /run never blocks on Groq.
+        explanation = generate_explanation(job, state, chosen_dc, scores, breakdown,
+                                            metrics, rl_q, use_llm=False)
 
         # Quality score = static score of chosen server (0–1, stable, meaningful for display)
         # RL reward is the training signal (can go negative due to overload penalty)
@@ -541,6 +555,31 @@ def run_scheduler(request: Request):
             "explanation":     explanation,
         })
     return {"scheduled_jobs": scheduled_jobs, "server_loads": s["server_loads"]}
+
+
+# ─────────────────────────────────────────────────────────────────
+# EXPLAIN — lazy LLM explanation for a single already-scheduled job
+# Called on demand from the XAI tab; keeps /run fast.
+# ─────────────────────────────────────────────────────────────────
+@app.post("/explain")
+def explain_job(payload: dict = Body(...)):
+    try:
+        priority = payload["priority"]
+        if priority not in PRIORITY_WEIGHTS:
+            return {"explanation": payload.get("explanation", "")}
+        job       = {"priority": priority, "latency": payload.get("latency", "N/A")}
+        state     = payload["state"]
+        chosen_dc = payload["chosen_dc"]
+        scores    = payload.get("scores", {})
+        breakdown = payload["score_breakdown"]
+        metrics   = payload["all_metrics"]
+        rl_q      = payload.get("rl_q_values", {})
+        text = generate_explanation(job, state, chosen_dc, scores, breakdown,
+                                    metrics, rl_q, use_llm=True)
+        return {"explanation": text}
+    except Exception:
+        # Never fail the request — fall back to whatever text the client already has
+        return {"explanation": payload.get("explanation", "")}
 
 
 # ─────────────────────────────────────────────────────────────────
