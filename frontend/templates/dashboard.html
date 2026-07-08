@@ -1044,6 +1044,36 @@ const SID = getSessionId();
 function apiHeaders(extra) {
   return Object.assign({'Content-Type':'application/json','X-Session-ID': SID}, extra||{});
 }
+
+// Resilient POST — checks status and retries cold-start errors (Render free
+// tier returns 502/503 for ~50s while the instance wakes from sleep).
+async function apiPost(path, body, {retries=4, onWake=null} = {}) {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const r = await fetch(`${API}${path}`, {
+        method:'POST', headers:apiHeaders(),
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      if (r.ok) return r;
+      // 5xx during wake-up → wait and retry; other errors are real
+      if ([502,503,504].includes(r.status) && i < retries) {
+        if (onWake) onWake();
+        await new Promise(res => setTimeout(res, 3000 + i*2000));
+        continue;
+      }
+      throw new Error(`HTTP ${r.status}`);
+    } catch(e) {
+      lastErr = e;
+      if (i < retries) {   // network error (often cold start) → retry
+        if (onWake) onWake();
+        await new Promise(res => setTimeout(res, 3000 + i*2000));
+        continue;
+      }
+    }
+  }
+  throw lastErr || new Error('request failed');
+}
 // ─────────────────────────────────────────────────────────────────
 
 let history = JSON.parse(localStorage.getItem('gm_history_' + SID) || '[]');
@@ -1241,10 +1271,11 @@ async function runScheduler() {
   icon.innerHTML = '<span class="spinner"></span>';
   text.textContent = 'Running…';
   overlayShow(queue.length);
+  const wakeHint = () => toast('Waking the server (free tier sleeps when idle)…', 'info');
   try {
     // Phase 0: upload batch
     overlayStep(0, 'active'); overlayProgress(5);
-    await fetch(`${API}/submit_batch`, {method:'POST', headers:apiHeaders(), body: JSON.stringify(queue)});
+    await apiPost('/submit_batch', queue, {onWake: wakeHint});
     overlayStep(0, 'done'); overlayProgress(20);
 
     // Phase 1: energy/carbon (visual delay so user sees it)
@@ -1259,7 +1290,7 @@ async function runScheduler() {
 
     // Phase 3+4: actual scheduling + XAI (the real wait)
     overlayStep(3, 'active'); overlayProgress(65);
-    const r = await fetch(`${API}/run`, {method:'POST', headers:apiHeaders()});
+    const r = await apiPost('/run', undefined, {onWake: wakeHint});
     overlayStep(3, 'done');
     overlayStep(4, 'active'); overlayProgress(88);
     const d = await r.json();
@@ -1284,7 +1315,8 @@ async function runScheduler() {
     }
   } catch(e) {
     overlayHide();
-    toast('Scheduler error — is the API running?', 'error');
+    const reason = (e && e.message) ? ` (${e.message})` : '';
+    toast(`Scheduler error${reason} — please try again`, 'error');
   }
   icon.innerHTML = '<i class="fa fa-play"></i>';
   text.textContent = 'Run Scheduler';

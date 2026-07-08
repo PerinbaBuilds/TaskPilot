@@ -118,8 +118,14 @@ PRIORITY_WEIGHTS = {
 # ─────────────────────────────────────────────────────────────────
 # GROQ CLIENT
 # ─────────────────────────────────────────────────────────────────
-GROQ_KEY    = os.getenv("GROQ_API_KEY", "")
-groq_client = Groq(api_key=GROQ_KEY, max_retries=0)
+GROQ_KEY = os.getenv("GROQ_API_KEY", "")
+# Never let a missing/invalid key or SDK-version quirk crash startup — the app
+# must boot and schedule even with no LLM. XAI falls back to rule-based text.
+try:
+    groq_client = Groq(api_key=GROQ_KEY, max_retries=0) if GROQ_KEY else None
+except Exception as e:
+    print(f"⚠️  Groq client unavailable ({e}); using rule-based explanations")
+    groq_client = None
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -412,9 +418,9 @@ def generate_explanation(job, state, chosen_dc, scores, breakdown, metrics,
     # Instant rule-based explanation — always available, never blocks.
     rule = _rule_explanation(job, state, chosen_dc, breakdown, priority, w, pool_names)
 
-    # During batch scheduling (use_llm=False) or without a key, skip the network
-    # entirely so /run stays fast. The richer LLM text is fetched lazily via /explain.
-    if not use_llm or not GROQ_KEY:
+    # During batch scheduling (use_llm=False) or without a working client, skip
+    # the network so /run stays fast. Richer LLM text is fetched lazily via /explain.
+    if not use_llm or groq_client is None:
         return rule
 
     cache_key = _xai_key(chosen_dc, priority, state["carbon_factor"])
