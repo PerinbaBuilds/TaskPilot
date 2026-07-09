@@ -1273,9 +1273,9 @@ async function runScheduler() {
   overlayShow(queue.length);
   const wakeHint = () => toast('Waking the server (free tier sleeps when idle)…', 'info');
   try {
-    // Phase 0: upload batch
+    // Phase 0: validate batch locally
     overlayStep(0, 'active'); overlayProgress(5);
-    await apiPost('/submit_batch', queue, {onWake: wakeHint});
+    await new Promise(r => setTimeout(r, 300));
     overlayStep(0, 'done'); overlayProgress(20);
 
     // Phase 1: energy/carbon (visual delay so user sees it)
@@ -1288,9 +1288,10 @@ async function runScheduler() {
     await new Promise(r => setTimeout(r, 300));
     overlayStep(2, 'done'); overlayProgress(60);
 
-    // Phase 3+4: actual scheduling + XAI (the real wait)
+    // Phase 3+4: actual scheduling + XAI — jobs travel WITH the run
+    // request so a server restart between calls can't lose the batch
     overlayStep(3, 'active'); overlayProgress(65);
-    const r = await apiPost('/run', undefined, {onWake: wakeHint});
+    const r = await apiPost('/run', queue, {onWake: wakeHint});
     overlayStep(3, 'done');
     overlayStep(4, 'active'); overlayProgress(88);
     const d = await r.json();

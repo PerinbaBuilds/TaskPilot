@@ -479,7 +479,7 @@ mention tier routing, dominant metric, and grid carbon conditions. Do not greet 
 # SCHEDULER ENDPOINT
 # ─────────────────────────────────────────────────────────────────
 @app.post("/run")
-def run_scheduler(request: Request):
+def run_scheduler(request: Request, jobs: list = Body(default=[])):
     sid = request.headers.get("X-Session-ID", "default")
     s = _get_session(sid)
     # Ensure server_loads key exists for older sessions
@@ -487,6 +487,19 @@ def run_scheduler(request: Request):
         s["server_loads"] = {f"Server {int(row['ID'])}": 0 for _, row in SERVERS.iterrows()}
     if "rr_index" not in s:
         s["rr_index"] = {"green": 0, "balanced": 0, "performance": 0}
+
+    # Jobs may arrive directly in the request body — this makes /run
+    # self-contained. The free-tier instance sleeps/restarts between
+    # requests, wiping the in-memory session queue, so relying on a
+    # previous /submit_batch call is fragile. When the client sends its
+    # queue here, it is the source of truth and replaces any stale queue.
+    if jobs:
+        s["job_queue"] = []
+        for job in jobs:
+            s["job_id_counter"] += 1
+            job["job_id"] = s["job_id_counter"]
+            s["submitted_ids"].add(job["job_id"])
+            s["job_queue"].append(job)
 
     scheduled_jobs = []
     prev_feat: dict = {}  # last feature vector per priority for TD(next_state)
