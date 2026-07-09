@@ -22,7 +22,7 @@ Thumbs.db
 # Secrets
 .streamlit/secrets.toml
 
-# Claude Code
+# Local tooling
 .claude/
 
 # Generated / temp job files
