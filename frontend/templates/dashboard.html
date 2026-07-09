@@ -1311,8 +1311,12 @@ async function runScheduler() {
       renderOverview();
       renderJobsTables();
       toast(`✓ Scheduled ${jobs.length} job${jobs.length>1?'s':''} across all servers`, 'success');
+    } else if (queue.length) {
+      // We sent jobs but the server scheduled none — almost always a stale
+      // deployment or cached page still running the old flow.
+      toast('Server returned 0 jobs — the deploy may still be updating. Hard-refresh (Ctrl+Shift+R) and retry.', 'error');
     } else {
-      toast('No jobs returned from scheduler', 'info');
+      toast('No jobs in queue to schedule', 'info');
     }
   } catch(e) {
     overlayHide();
