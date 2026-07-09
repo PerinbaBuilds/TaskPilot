@@ -1216,8 +1216,8 @@ async function submitJob() {
       job_id:   d.job_id,
       priority: payload.priority,
       latency:  payload.latency,
-      cpu:      document.getElementById('fCPU').value,
-      mem:      document.getElementById('fMem').value,
+      cpu:      parseInt(document.getElementById('fCPU').value) || 50,
+      memory:   parseInt(document.getElementById('fMem').value) || 50,
     });
     save();
     updateQueueBadge();

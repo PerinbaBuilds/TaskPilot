@@ -253,6 +253,39 @@ def reset_state(request: Request):
     return {"status": "reset ok"}
 
 
+VALID_PRIORITIES = {"green", "balanced", "performance"}
+
+def _to_num(value, default: float) -> float:
+    """Coerce any client-supplied value (str, None, number) to a float."""
+    try:
+        n = float(value)
+        if n != n:          # NaN guard
+            return float(default)
+        return n
+    except (TypeError, ValueError):
+        return float(default)
+
+def normalize_job(job: dict) -> dict:
+    """Make a job dict safe for scheduling regardless of client shape.
+
+    The frontend sends cpu/memory as strings from the manual form, uses
+    'mem' as an alias for 'memory', and may omit or mis-spell priority.
+    Coerce everything here so /run can never crash on a bad payload.
+    """
+    if not isinstance(job, dict):
+        job = {}
+    priority = str(job.get("priority", "balanced")).strip().lower()
+    if priority not in VALID_PRIORITIES:
+        priority = "balanced"
+    job["priority"] = priority
+    job["latency"]  = str(job.get("latency", "medium")).strip().lower() or "medium"
+    cpu = job.get("cpu", job.get("cpu_util"))
+    mem = job.get("memory", job.get("mem"))
+    job["cpu"]    = min(max(_to_num(cpu, 50.0), 0.0), 100.0)
+    job["memory"] = min(max(_to_num(mem, 50.0), 0.0), 100.0)
+    return job
+
+
 # ─────────────────────────────────────────────────────────────────
 # BUILD SYSTEM STATE FROM DATASETS
 # ─────────────────────────────────────────────────────────────────
@@ -496,6 +529,7 @@ def run_scheduler(request: Request, jobs: list = Body(default=[])):
     if jobs:
         s["job_queue"] = []
         for job in jobs:
+            job = normalize_job(job)
             s["job_id_counter"] += 1
             job["job_id"] = s["job_id_counter"]
             s["submitted_ids"].add(job["job_id"])
@@ -505,7 +539,7 @@ def run_scheduler(request: Request, jobs: list = Body(default=[])):
     prev_feat: dict = {}  # last feature vector per priority for TD(next_state)
 
     while s["job_queue"]:
-        job      = s["job_queue"].pop(0)
+        job      = normalize_job(s["job_queue"].pop(0))
         priority = job["priority"]
         state    = compute_state()
         scores, metrics, breakdown = compute_scores(state, priority, s["server_loads"])
