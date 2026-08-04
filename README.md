@@ -1,5 +1,7 @@
 # TaskPilot
 
+[![CI](https://img.shields.io/github/actions/workflow/status/PerinbaBuilds/TaskPilot/deploy-render.yml?branch=main&style=for-the-badge&logo=githubactions&logoColor=2088FF&label=CI&labelColor=0D1117)](https://github.com/PerinbaBuilds/TaskPilot/actions/workflows/deploy-render.yml)
+
 **A sustainable cloud job scheduler that routes each workload to the server with the lowest carbon + cost + latency cost — and uses reinforcement learning to keep getting better at it.**
 
 > Live demo: [taskpilot-krt8.onrender.com](https://taskpilot-krt8.onrender.com)

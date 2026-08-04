@@ -713,4 +713,4 @@ def root():
 @app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     # 'build' lets us confirm which code the live instance is serving.
-    return {"status": "ok", "build": "run-inline-body", "run_accepts_body": True, "rev": 2}
+    return {"status": "ok", "build": "run-inline-body", "run_accepts_body": True}
