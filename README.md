@@ -24,6 +24,29 @@ Most schedulers optimise for speed and price and stop there — the carbon footp
 
 ---
 
+## How It Works
+
+Every job flows through the same five steps:
+
+1. **Tier assignment** — each job has a priority (`green`, `balanced`, `performance`) that maps to a fixed pool of 3 servers. Green jobs only ever compete on the efficient servers, performance jobs on the powerful ones — so sustainability is enforced structurally, before scoring even happens.
+
+2. **Read the environment** — the scheduler samples a live snapshot from real datasets: current **grid carbon intensity**, **energy price**, and **system load**.
+
+3. **Score the pool** — for the 3 candidate servers, it computes four normalised (0–1) sub-scores — throughput, cost, CO₂, and latency — then weights them by the job's priority profile (e.g. green weights CO₂ at 40%, performance weights throughput + latency at 40% each).
+
+4. **RL agent picks the server** — a per-tier Q-learning agent takes the server loads + carbon + price + job size as its state and chooses where to place the job (ε-greedy). Its reward is `quality − overload_penalty`, so it learns to balance load across the pool instead of always piling onto the single best-scoring server. It updates its weights (TD(0)) after every placement, so it keeps improving as jobs run.
+
+5. **Explain the decision** — each placement gets an instant plain-English explanation (tier, dominant metric, carbon conditions). Open a job in the *Explainable AI* tab and it upgrades to a richer LLM explanation on demand.
+
+```
+Job → tier pool (3 servers) → read carbon/price/load → score the pool
+      → RL agent picks a server → reward + learn → explain
+```
+
+The result is a scheduler that respects sustainability constraints by design, optimises within them, and gets measurably better at load-balancing the more it runs — all while showing its reasoning.
+
+---
+
 ## Features
 
 - **Carbon-aware routing** — every job is placed using a live grid-carbon signal, not just CPU/price.
