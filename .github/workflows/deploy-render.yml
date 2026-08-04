@@ -1,0 +1,43 @@
+name: Deploy to Render
+
+# Records a deployment in the GitHub "production" environment on every push
+# to main, so Render deploys show up under the repo's Deployments tab.
+#
+# Optional: to have this workflow ALSO trigger the Render build itself, add a
+# repository secret named RENDER_DEPLOY_HOOK (Render → your service → Settings
+# → Deploy Hook → copy the URL). If you do that, turn OFF Render's own
+# Auto-Deploy so the build only runs once.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Never run two production deploys at the same time.
+concurrency:
+  group: render-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # This 'environment' block is what creates the entry in the Deployments tab.
+    environment:
+      name: production
+      url: https://taskpilot-krt8.onrender.com
+    steps:
+      - name: Trigger Render deploy (if hook configured)
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+        run: |
+          if [ -n "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Triggering Render deploy via deploy hook…"
+            curl -fsSL -X POST "$RENDER_DEPLOY_HOOK"
+            echo "Render build triggered."
+          else
+            echo "No RENDER_DEPLOY_HOOK secret set — recording deployment only."
+            echo "Render's own Auto-Deploy handles the actual build."
+          fi
+
+      - name: Done
+        run: echo "Deployment recorded for production → https://taskpilot-krt8.onrender.com"
