@@ -11,6 +11,13 @@ import numpy as np
 from rl.agents import TierAgent
 from core.config import get_weights as _cfg_weights
 
+# Load variables from a local .env file if present (optional for local dev).
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 app = FastAPI()
 
 app.add_middleware(
