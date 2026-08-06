@@ -1,4 +1,4 @@
-# TaskPilot &nbsp;[![CI](https://img.shields.io/github/actions/workflow/status/PerinbaBuilds/TaskPilot/deploy-render.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI&labelColor=30363D)](https://github.com/PerinbaBuilds/TaskPilot/actions/workflows/deploy-render.yml)
+# TaskPilot &nbsp;[![CI](https://img.shields.io/github/actions/workflow/status/PerinbaBuilds/TaskPilot/deploy-render.yml?branch=main&style=flat-square&logo=githubactions&logoColor=white&label=CI&labelColor=0D1117)](https://github.com/PerinbaBuilds/TaskPilot/actions/workflows/deploy-render.yml)
 
 **A sustainable cloud job scheduler that routes each workload to the server with the lowest carbon + cost + latency cost — and uses reinforcement learning to keep getting better at it.**
 
@@ -6,14 +6,14 @@
 > *(free-tier host — first request may take ~50s to wake)*
 
 <p align="left">
-  <img src="https://img.shields.io/badge/Python-30363D?style=for-the-badge&logo=python&logoColor=4B8BBE" alt="Python"/>
-  <img src="https://img.shields.io/badge/FastAPI-30363D?style=for-the-badge&logo=fastapi&logoColor=009688" alt="FastAPI"/>
-  <img src="https://img.shields.io/badge/NumPy-30363D?style=for-the-badge&logo=numpy&logoColor=4DABCF" alt="NumPy"/>
-  <img src="https://img.shields.io/badge/Pandas-30363D?style=for-the-badge&logo=pandas&logoColor=E70488" alt="Pandas"/>
-  <img src="https://img.shields.io/badge/Groq_LLM-30363D?style=for-the-badge&logo=groq&logoColor=F55036" alt="Groq"/>
-  <img src="https://img.shields.io/badge/Chart.js-30363D?style=for-the-badge&logo=chartdotjs&logoColor=FF6384" alt="Chart.js"/>
-  <img src="https://img.shields.io/badge/Docker-30363D?style=for-the-badge&logo=docker&logoColor=2496ED" alt="Docker"/>
-  <img src="https://img.shields.io/badge/Render-30363D?style=for-the-badge&logo=render&logoColor=46E3B7" alt="Render"/>
+  <img src="https://img.shields.io/badge/Python-0D1117?style=for-the-badge&logo=python&logoColor=4B8BBE" alt="Python"/>
+  <img src="https://img.shields.io/badge/FastAPI-0D1117?style=for-the-badge&logo=fastapi&logoColor=009688" alt="FastAPI"/>
+  <img src="https://img.shields.io/badge/NumPy-0D1117?style=for-the-badge&logo=numpy&logoColor=4DABCF" alt="NumPy"/>
+  <img src="https://img.shields.io/badge/Pandas-0D1117?style=for-the-badge&logo=pandas&logoColor=E70488" alt="Pandas"/>
+  <img src="https://img.shields.io/badge/Groq_LLM-0D1117?style=for-the-badge&logo=groq&logoColor=F55036" alt="Groq"/>
+  <img src="https://img.shields.io/badge/Chart.js-0D1117?style=for-the-badge&logo=chartdotjs&logoColor=FF6384" alt="Chart.js"/>
+  <img src="https://img.shields.io/badge/Docker-0D1117?style=for-the-badge&logo=docker&logoColor=2496ED" alt="Docker"/>
+  <img src="https://img.shields.io/badge/Render-0D1117?style=for-the-badge&logo=render&logoColor=46E3B7" alt="Render"/>
 </p>
 
 ---
